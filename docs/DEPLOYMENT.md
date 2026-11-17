@@ -160,6 +160,7 @@ docker compose exec api python -c "import app.main"   # importación sana
 curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/tasks | head -c 200
 curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/incidents | head -c 200
 curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/attendance/me | head -c 200
+curl -fsS -b cookies.txt "http://127.0.0.1:8000/api/v1/optimization/slotting?days=30" | head -c 200
 ```
 
 Las migraciones son aditivas por diseño; aun así, pruebe siempre en staging con una copia de la

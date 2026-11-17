@@ -385,6 +385,77 @@ export interface AttendanceSummary {
   items: AttendanceSummaryRow[];
 }
 
+export interface PutawayCandidate {
+  location_id: string;
+  location_code: string;
+  is_pick_face: boolean;
+  capacity_pallets: number;
+  occupied_pallets: number;
+  free_pallets: number;
+  units: Decimal;
+  same_product_units: Decimal;
+  distance_m: number;
+  score: number;
+  reasons: string[];
+}
+
+export interface PutawaySuggestion {
+  product_id: string;
+  product_sku: string;
+  product_name: string;
+  pallets: number;
+  fast_mover: boolean;
+  moves: number;
+  fits: boolean;
+  candidates: PutawayCandidate[];
+  assumptions: Record<string, number>;
+  note: string;
+}
+
+export interface RouteStop {
+  sequence: number;
+  location_id: string;
+  location_code: string;
+  product_id: string | null;
+  product_sku: string | null;
+  product_name: string | null;
+  quantity: Decimal | null;
+  pallet_code: string | null;
+  distance_from_previous_m: number;
+  pick_seconds: number;
+}
+
+export interface PickingRoute {
+  stops: RouteStop[];
+  total_distance_m: number;
+  total_pick_seconds: number;
+  return_to_dispatch: boolean;
+  assumptions: Record<string, number>;
+  note: string;
+}
+
+export interface SlottingRow {
+  product_id: string;
+  product_sku: string;
+  product_name: string;
+  moves: number;
+  units_out: Decimal;
+  locations: number;
+  in_pick_face: boolean;
+  nearest_distance_m: number | null;
+  on_hand: Decimal;
+  recommendation: string;
+  reason: string;
+}
+
+export interface SlottingReport {
+  days: number;
+  items: SlottingRow[];
+  total: number;
+  assumptions: Record<string, number>;
+  note: string;
+}
+
 export type IncidentType = "damage" | "discrepancy" | "quality" | "safety" | "other";
 export type IncidentStatus = "open" | "acknowledged" | "resolved" | "closed";
 export type IncidentSeverity = "low" | "medium" | "high" | "critical";

@@ -220,3 +220,14 @@ validan en el servidor, incluida la compatibilidad con registros posteriores cua
 inserta un fichaje antiguo. El nivel 4 puede fichar únicamente su propia ficha; los responsables
 pueden registrar fichajes ajenos (por ejemplo, una tarjeta olvidada) y queda constancia de quién lo
 hizo. La planificación de turnos y las tarjetas NFC siguen pendientes y no se simulan.
+
+## D-25. Optimización como sugerencia con geometría declarada
+
+La base de datos guarda códigos de pasillo, estantería, nivel y posición, pero no medidas reales.
+En lugar de inventar precisión, el motor de optimización usa un modelo geométrico explícito que
+viaja en cada respuesta (`assumptions`): 3 m entre pasillos, 6 m entre estanterías, 1 m entre
+posiciones y tiempos de picking declarados. Las recomendaciones de slotting se basan en datos
+reales (salidas confirmadas, stock, capacidad y caras de picking) y explican sus motivos; no
+ejecutan movimientos ni reservas. Cuando el almacén disponga de plano y tiempos medidos, solo hay
+que recalibrar constantes y sustituir el orden en S por el motor que corresponda, sin cambiar el
+contrato de la API ni la fuente de verdad del stock.

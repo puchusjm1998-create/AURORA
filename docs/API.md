@@ -248,6 +248,25 @@ RBAC: `attendance.read` (niveles 1–3 y auditor), `attendance.manage` (niveles 
 `attendance.clock` (niveles 1–4). El nivel 4 solo puede fichar su propia ficha; si intenta fichar
 por otra persona recibe 403. El auditor no ficha.
 
+## Optimización de ubicaciones y rutas
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/optimization/putaway` | Sugerencia de ubicación (`product_id`, `pallets`, `limit`) |
+| POST | `/optimization/picking-route` | Ruta de picking por reserva o por lista de ubicaciones |
+| GET | `/optimization/slotting` | Análisis de rotación/ubicación (`days`, `limit`) |
+
+`picking-route` acepta **solo una** de estas fuentes: `reservation_reference` (reserva activa) o
+`location_ids` (máx. 50). También admite `return_to_dispatch`. La ruta se ordena con barrido en S:
+pasillos ascendentes y posiciones alternando sentido.
+
+El modelo geométrico es explícito y se devuelve en `assumptions`: 3,0 m entre pasillos, 6,0 m entre
+estanterías, 1,0 m entre posiciones, 25 s base por parada y 6 s por nivel por encima del primero.
+Las sugerencias de ubicación puntúan consolidación del mismo producto, cara de picking para alta
+rotación, huecos parciales, nivel y distancia al muelle. **Nada se mueve, reserva ni modifica
+automáticamente**; se requiere `inventory.read` y el movimiento posterior se hace por
+`/movements`.
+
 ## Facturas y conciliación
 
 | Método | Ruta | Descripción |

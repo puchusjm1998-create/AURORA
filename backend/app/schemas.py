@@ -612,6 +612,83 @@ class AttendanceSummary(BaseModel):
     items: list[AttendanceSummaryRow]
 
 
+class PutawayCandidate(BaseModel):
+    location_id: str
+    location_code: str
+    is_pick_face: bool
+    capacity_pallets: int
+    occupied_pallets: int
+    free_pallets: int
+    units: Decimal
+    same_product_units: Decimal
+    distance_m: float
+    score: float
+    reasons: list[str]
+
+
+class PutawaySuggestion(BaseModel):
+    product_id: str
+    product_sku: str
+    product_name: str
+    pallets: int
+    fast_mover: bool
+    moves: int
+    fits: bool
+    candidates: list[PutawayCandidate]
+    assumptions: dict[str, float]
+    note: str
+
+
+class RouteRequest(BaseModel):
+    reservation_reference: Optional[str] = None
+    location_ids: list[str] = Field(default_factory=list, max_length=50)
+    return_to_dispatch: bool = True
+
+
+class RouteStop(BaseModel):
+    sequence: int
+    location_id: str
+    location_code: str
+    product_id: Optional[str] = None
+    product_sku: Optional[str] = None
+    product_name: Optional[str] = None
+    quantity: Optional[Decimal] = None
+    pallet_code: Optional[str] = None
+    distance_from_previous_m: float
+    pick_seconds: int
+
+
+class PickingRoute(BaseModel):
+    stops: list[RouteStop]
+    total_distance_m: float
+    total_pick_seconds: int
+    return_to_dispatch: bool
+    assumptions: dict[str, float]
+    note: str
+
+
+class SlottingRow(BaseModel):
+    product_id: str
+    product_sku: str
+    product_name: str
+    moves: int
+    units_out: Decimal
+    locations: int
+    in_pick_face: bool
+    nearest_distance_m: Optional[float] = None
+    on_hand: Decimal
+    recommendation: str
+    reason: str
+
+
+class SlottingReport(BaseModel):
+    days: int
+    items: list[SlottingRow]
+    total: int
+    assumptions: dict[str, float]
+    note: str
+
+
 class IncidentCreate(BaseModel):
     title: str = Field(min_length=1, max_length=160)
     description: str = ""

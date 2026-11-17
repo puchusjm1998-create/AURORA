@@ -231,3 +231,13 @@ reales (salidas confirmadas, stock, capacidad y caras de picking) y explican sus
 ejecutan movimientos ni reservas. Cuando el almacén disponga de plano y tiempos medidos, solo hay
 que recalibrar constantes y sustituir el orden en S por el motor que corresponda, sin cambiar el
 contrato de la API ni la fuente de verdad del stock.
+
+## D-26. Cargar un reparto es la única salida de stock
+
+Un reparto agrupa palés precintados y no toca existencias hasta que se carga. En ese momento se
+crean movimientos `shipment` confirmados por cada línea de cada palé, dentro de una sola
+transacción: si un producto no tiene stock disponible (o está reservado), no se genera ningún
+movimiento parcial y la carga falla con un error explicable. Los palés pasan a tránsito y se
+desvinculan de la ubicación; al entregar quedan `shipped`. Un palé solo puede pertenecer a un
+reparto activo, y cancelar antes de cargar lo libera, de modo que el flujo no bloquea la operación.
+Después de cargar, el reparto es inmutable salvo por los hitos del transporte, que se auditan.

@@ -29,6 +29,7 @@ from app.core.config import get_settings  # noqa: E402
 from app.core.db import SessionLocal, engine  # noqa: E402
 from app.core.enums import (  # noqa: E402
     AttendanceEventType,
+    DeliveryStatus,
     IncidentSeverity,
     IncidentStatus,
     IncidentType,
@@ -43,6 +44,8 @@ from app.core.timeutils import MADRID  # noqa: E402
 from app.db.triggers import install_immutability_triggers  # noqa: E402
 from app.models import (  # noqa: E402
     AttendanceRecord,
+    Delivery,
+    DeliveryPallet,
     Employee,
     Incident,
     Invoice,
@@ -56,6 +59,7 @@ from app.models import (  # noqa: E402
     Supplier,
     Task,
     User,
+    Vehicle,
     Warehouse,
 )
 from app.services.sequences import next_code  # noqa: E402
@@ -657,6 +661,43 @@ def build(args: argparse.Namespace) -> None:
         punch("encargado@aurora.demo", AttendanceEventType.CLOCK_IN, now_naive - timedelta(hours=3))
         db.commit()
 
+        # -- Vehicles and deliveries ---------------------------------------
+        vehicle_a = Vehicle(plate="1234 ABC", model="Iveco Daily 35S14", capacity_kg=Decimal("3500"))
+        vehicle_b = Vehicle(plate="5678 DEF", model="Mercedes Sprinter 315", capacity_kg=Decimal("1400"))
+        db.add_all([vehicle_a, vehicle_b])
+        db.flush()
+        delivery_a = Delivery(
+            reference=next_code(db, "delivery"),
+            vehicle_id=vehicle_a.id,
+            driver_employee_id=employees["diego@aurora.demo"].id,
+            status=DeliveryStatus.DRAFT,
+            destination_name="Cliente Demo Norte S.L.",
+            destination_address="Polígono Cabezo Beaza, nave 14, Cartagena",
+            planned_departure=now + timedelta(days=1, hours=2),
+            notes="Descarga con muelle propio; llamar al llegar.",
+            created_by=supervisor.id,
+        )
+        delivery_b = Delivery(
+            reference=next_code(db, "delivery"),
+            vehicle_id=vehicle_b.id,
+            driver_employee_id=employees["pablo@aurora.demo"].id,
+            status=DeliveryStatus.PREPARING,
+            destination_name="Ferretería del Puerto",
+            destination_address="Calle Real 22, Cartagena",
+            planned_departure=now + timedelta(hours=5),
+            notes="Entregar antes de las 14:00.",
+            created_by=supervisor.id,
+        )
+        db.add_all([delivery_a, delivery_b])
+        db.flush()
+        db.add_all(
+            [
+                DeliveryPallet(delivery_id=delivery_a.id, pallet_id=pallet_c.id),
+                DeliveryPallet(delivery_id=delivery_b.id, pallet_id=pallet_b.id),
+            ]
+        )
+        db.commit()
+
         # -- Invoice reconciliation --------------------------------------
         # Invoice A fully received -> reconciled.
         for line in invoice_a.lines:
@@ -690,7 +731,7 @@ def build(args: argparse.Namespace) -> None:
         print(f"Almacén: {warehouse.code} · {warehouse.name}")
         print(
             f"Ubicaciones: {len(locations)} · Productos: {len(products)} · Palés: 4"
-            f" · Tareas: {len(task_specs)} · Incidencias: {len(incident_specs)} · Fichajes: 24"
+            f" · Tareas: {len(task_specs)} · Incidencias: {len(incident_specs)} · Fichajes: 24 · Repartos: 2"
         )
         print("Cuentas (contraseña única de demo):", DEMO_PASSWORD)
         for label, email in [

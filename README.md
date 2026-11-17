@@ -2,10 +2,11 @@
 
 Plataforma de gestión logística para almacenes de 10–50 trabajadores. Esta entrega cubre la
 **Fase 1, la primera entrega funcional completa, las Fases 2 y 3, el fichaje de jornada y la
-optimización de ubicaciones**: recepción → almacenamiento → localización → expedición, con
-inventario real, trazabilidad QR, palés, movimientos auditados, reservas de stock, tareas de
+optimización de ubicaciones y repartos**: recepción → almacenamiento → localización → expedición,
+con inventario real, trazabilidad QR, palés, movimientos auditados, reservas de stock, tareas de
 almacén asignadas, incidencias con resolución trazable, fichaje con pausas y horas, sugerencias de
-ubicación y rutas de picking, facturas de proveedor, personal, informes y panel de control.
+ubicación y rutas de picking, repartos con vehículos y palés, facturas de proveedor, personal,
+informes y panel de control.
 
 El sistema no es una maqueta: la interfaz habla con una API FastAPI que persiste en base de datos,
 valida permisos en el servidor y registra cada operación en un libro de auditoría inmutable.
@@ -52,6 +53,7 @@ Además: facturas con documento original inmutable, conciliación, personal y cu
 | Fichaje de jornada con entrada, salida, pausas y resumen de horas | ✅ | `/fichaje` (personal y visión del equipo) |
 | Registro manual de fichajes con auditoría | ✅ | `/fichaje` (nivel ≥ 2 con `attendance.manage`) |
 | Sugerencia de ubicación y ruta de picking (estimación declarada) | ✅ | `/optimizacion` (slotting, putaway y recorrido en S) |
+| Repartos con vehículos, palés y expedición real de stock | ✅ | `/repartos` y ficha `/reparto` (cargar = salida auditada) |
 | Indicadores operativos en el panel | ✅ | `/` (tareas, reservas, incidencias y disponible real) |
 
 ### Lo que todavía no está implementado (y no se muestra como si lo estuviera)
@@ -67,8 +69,8 @@ las identifica explícitamente:
   estructura y SHA-256; el adaptador S3 queda pendiente.
 - **Redis/Celery** (Fase 4+): trabajos asíncronos (informes programados, notificaciones). Las
   tareas de almacén de la Fase 2 ya son reales, pero se ejecutan de forma síncrona.
-- **Telefonía SIP/API** y **repartos** (Fase 8); **tarjetas NFC, turnos planificados y bolsa de
-  horas** (Fase 7). El fichaje básico ya es real y auditable.
+- **Telefonía SIP/API, GPS de repartos y firma digital de entrega** (Fase 8); **tarjetas NFC,
+  turnos planificados y bolsa de horas** (Fase 7). Los repartos ya expiden stock real.
 - **Informes PDF/Excel nativos** (Fase 9); los CSV actuales son reales y completos.
 - **Calibración del modelo de distancias** con el plano real del almacén y tiempos medidos (Fase 6
   avanzada): hoy las sugerencias son reales, pero la geometría es una aproximación declarada.
@@ -148,7 +150,7 @@ backend/
     db/            bootstrap, triggers de inmutabilidad
   alembic/         migraciones versionadas
   scripts/         seed_demo.py (dataset de demostración aislado)
-  tests/           45 pruebas automatizadas
+  tests/           47 pruebas automatizadas
 frontend/
   app/             rutas App Router (login y área autenticada)
   components/      design system, shell, selectores, escáner QR
@@ -230,10 +232,10 @@ cd backend
 ../.venv/bin/python -m pytest tests -q
 ```
 
-Resultado actual: **45 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
+Resultado actual: **47 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
 etiquetas, escaneo, facturas, mapa del almacén, reservas —incluida su caducidad—, tareas de
 almacén, incidencias, fichaje —secuencias y resumen de horas—, optimización de ubicaciones y
-rutas, informes y auditoría). Las pruebas usan una base de datos SQLite temporal por ejecución;
+rutas, repartos con expedición de stock, informes y auditoría). Las pruebas usan una base de datos SQLite temporal por ejecución;
 nunca tocan datos reales.
 
 Verificación manual del flujo completo con la API en marcha:
@@ -254,7 +256,9 @@ Verificación manual del flujo completo con la API en marcha:
    resumen del equipo.
 10. `/optimizacion` → pedir una sugerencia de ubicación para un producto con stock, calcular la
     ruta de una reserva activa y revisar el análisis de slotting; comprobar que nada se mueve solo.
-11. `/operaciones` → expedición; `/movimientos` → ver el libro y confirmar el stock restante.
+11. `/repartos` → crear un reparto con vehículo, añadir un palé precintado y cargarlo; comprobar
+    que el stock baja una sola vez y que el palé queda en tránsito.
+12. `/operaciones` → expedición; `/movimientos` → ver el libro y confirmar el stock restante.
 
 ---
 

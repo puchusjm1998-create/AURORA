@@ -267,6 +267,37 @@ rotación, huecos parciales, nivel y distancia al muelle. **Nada se mueve, reser
 automáticamente**; se requiere `inventory.read` y el movimiento posterior se hace por
 `/movements`.
 
+## Repartos y vehículos
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET/POST | `/vehicles` | Listar y crear vehículos (matrícula única) |
+| PATCH | `/vehicles/{id}` | Editar modelo, capacidad o estado |
+| GET | `/deliveries` | Lista paginada (`status` CSV, `search`, fechas, `limit`, `offset`) |
+| GET | `/deliveries/{id}` | Detalle con palés, líneas, vehículo y conductor |
+| POST | `/deliveries` | Crear reparto en borrador (201) |
+| PATCH | `/deliveries/{id}` | Editar solo en `draft`/`preparing` |
+| POST | `/deliveries/{id}/pallets` | Añadir palé precintado (201) |
+| DELETE | `/deliveries/{id}/pallets/{pallet_id}` | Quitar palé antes de cargar |
+| POST | `/deliveries/{id}/prepare` | `draft` → `preparing` |
+| POST | `/deliveries/{id}/ready` | `preparing` → `ready` (exige palés) |
+| POST | `/deliveries/{id}/load` | `ready` → `loaded`: genera las salidas de stock |
+| POST | `/deliveries/{id}/dispatch` | `loaded` → `in_transit` con `departed_at` |
+| POST | `/deliveries/{id}/deliver` | `in_transit` → `delivered`; palés `shipped` |
+| POST | `/deliveries/{id}/fail` | `in_transit` → `failed` con motivo obligatorio |
+| POST | `/deliveries/{id}/cancel` | Cancelar antes de cargar y liberar palés |
+| DELETE | `/deliveries/{id}` | Eliminar un borrador |
+
+El efecto sobre el stock ocurre **una sola vez, al cargar**: por cada producto de cada palé se crea
+un movimiento `shipment` confirmado y físico con `document_ref` igual a la referencia del reparto.
+El palé pasa a `in_transit` y se desvincula de su ubicación. Si falta stock o está reservado, la
+carga falla entera (sin dejar movimientos parciales). Un palé solo puede estar en un reparto activo
+a la vez; al cancelar el reparto se libera. Todo se audita (`delivery.created`, `pallet_added`,
+`loaded`, `dispatched`, `delivered`, `failed`, `cancelled`).
+
+RBAC: `deliveries.read` (niveles 1–3 y auditor) y `deliveries.write` (niveles 1–3). El nivel 4 no
+gestiona repartos.
+
 ## Facturas y conciliación
 
 | Método | Ruta | Descripción |

@@ -563,6 +563,90 @@ class TaskRead(ORMBase):
     created_at: UtcDateTime
 
 
+class VehicleCreate(BaseModel):
+    plate: str = Field(min_length=2, max_length=16)
+    model: str = ""
+    capacity_kg: Optional[Decimal] = None
+    is_active: bool = True
+
+
+class VehicleUpdate(BaseModel):
+    plate: Optional[str] = Field(default=None, min_length=2, max_length=16)
+    model: Optional[str] = None
+    capacity_kg: Optional[Decimal] = None
+    is_active: Optional[bool] = None
+
+
+class VehicleRead(ORMBase):
+    plate: str
+    model: str
+    capacity_kg: Optional[Decimal] = None
+    is_active: bool
+    created_at: UtcDateTime
+
+
+class DeliveryCreate(BaseModel):
+    destination_name: str = Field(min_length=1, max_length=150)
+    destination_address: str = ""
+    vehicle_id: Optional[str] = None
+    driver_employee_id: Optional[str] = None
+    planned_departure: Optional[datetime] = None
+    notes: str = ""
+
+
+class DeliveryUpdate(BaseModel):
+    destination_name: Optional[str] = Field(default=None, min_length=1, max_length=150)
+    destination_address: Optional[str] = None
+    vehicle_id: Optional[str] = None
+    driver_employee_id: Optional[str] = None
+    planned_departure: Optional[datetime] = None
+    notes: Optional[str] = None
+
+
+class DeliveryPalletAdd(BaseModel):
+    pallet_id: str
+
+
+class DeliveryFail(BaseModel):
+    reason: str = Field(min_length=5, max_length=2000)
+
+
+class DeliveryItemRead(BaseModel):
+    product_id: str
+    product_sku: str
+    product_name: str
+    quantity: Decimal
+    batch_code: Optional[str] = None
+
+
+class DeliveryPalletRead(BaseModel):
+    pallet_id: str
+    pallet_code: str
+    status: PalletStatus
+    location_code: Optional[str] = None
+    total_units: Decimal
+    items: list[DeliveryItemRead]
+
+
+class DeliveryRead(ORMBase):
+    reference: str
+    status: DeliveryStatus
+    destination_name: str
+    destination_address: str
+    vehicle_id: Optional[str] = None
+    vehicle_plate: Optional[str] = None
+    driver_employee_id: Optional[str] = None
+    driver_name: Optional[str] = None
+    planned_departure: Optional[UtcDateTime] = None
+    departed_at: Optional[UtcDateTime] = None
+    delivered_at: Optional[UtcDateTime] = None
+    notes: str = ""
+    pallets: list[DeliveryPalletRead]
+    total_units: Decimal
+    created_at: UtcDateTime
+    updated_at: UtcDateTime
+
+
 class AttendanceCreate(BaseModel):
     employee_id: Optional[str] = None
     event_type: AttendanceEventType

@@ -168,6 +168,7 @@ class DeliveryStatus(StrEnum):
     DELIVERED = "delivered"
     FAILED = "failed"
     RETURNED = "returned"
+    CANCELLED = "cancelled"
 
 
 class IncidentSeverity(StrEnum):

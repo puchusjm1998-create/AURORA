@@ -674,6 +674,36 @@ class Delivery(Base, TimestampMixin):
     notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
     created_by: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
+    vehicle: Mapped[Optional["Vehicle"]] = relationship(foreign_keys=[vehicle_id], lazy="joined")
+    driver: Mapped[Optional["Employee"]] = relationship(
+        foreign_keys=[driver_employee_id], lazy="joined"
+    )
+    creator: Mapped[Optional["User"]] = relationship(foreign_keys=[created_by], lazy="joined")
+    pallets: Mapped[list["DeliveryPallet"]] = relationship(
+        back_populates="delivery", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class DeliveryPallet(Base, TimestampMixin):
+    """Pallets assigned to a delivery (a pallet travels in one delivery at a time)."""
+
+    __tablename__ = "delivery_pallets"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    delivery_id: Mapped[str] = mapped_column(
+        ForeignKey("deliveries.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    pallet_id: Mapped[str] = mapped_column(
+        ForeignKey("pallets.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+
+    delivery: Mapped[Delivery] = relationship(back_populates="pallets")
+    pallet: Mapped[Pallet] = relationship(lazy="joined")
+
+    __table_args__ = (
+        UniqueConstraint("delivery_id", "pallet_id", name="uq_delivery_pallet"),
+    )
+
 
 class Task(Base, TimestampMixin):
     __tablename__ = "tasks"

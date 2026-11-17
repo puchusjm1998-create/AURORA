@@ -30,6 +30,7 @@ IMPLEMENTED = [
     "Incidencias de almacén con severidad, responsable y resolución auditada",
     "Fichaje de jornada con pausas, estados y resumen de horas auditado",
     "Sugerencias de ubicación y rutas de picking con modelo geométrico declarado",
+    "Repartos con vehículos, palés precintados y expedición de stock al cargar",
 ]
 
 PENDING = [
@@ -37,7 +38,7 @@ PENDING = [
     "Fase 5: AURORA Voice (reconocimiento y síntesis de voz, IA intercambiable)",
     "Fase 6: calibración fina con plano real, tiempos medidos y turnos de trabajo",
     "Fase 7: tarjetas digitales NFC, planificación de turnos y bolsa de horas",
-    "Fase 8: repartos, integración telefónica SIP/API y gestión avanzada de incidencias",
+    "Fase 8: integración telefónica SIP/API, seguimiento GPS y firma de entrega",
     "Fase 9: pruebas de carga, copias de seguridad automatizadas y despliegue definitivo",
 ]
 
@@ -51,7 +52,7 @@ def system_info() -> SystemInfo:
         demo_mode=settings.demo_mode,
         server_time_utc=utcnow().isoformat().replace("+00:00", "Z"),
         warehouse_timezone=settings.warehouse_timezone,
-        phase="Fases 1-3 + fichaje y optimización: inventario, tareas, incidencias, jornada y rutas",
+        phase="Fases 1-3, fichaje, optimización y repartos: operación completa de almacén",
         implemented=IMPLEMENTED,
         pending=PENDING,
     )

@@ -341,6 +341,63 @@ export interface Invoice {
   lines: InvoiceLine[];
 }
 
+export type DeliveryStatus =
+  | "draft"
+  | "preparing"
+  | "ready"
+  | "loaded"
+  | "in_transit"
+  | "delivered"
+  | "failed"
+  | "returned"
+  | "cancelled";
+
+export interface Vehicle {
+  id: string;
+  plate: string;
+  model: string;
+  capacity_kg: Decimal | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface DeliveryItem {
+  product_id: string;
+  product_sku: string;
+  product_name: string;
+  quantity: Decimal;
+  batch_code: string | null;
+}
+
+export interface DeliveryPallet {
+  pallet_id: string;
+  pallet_code: string;
+  status: PalletStatus;
+  location_code: string | null;
+  total_units: Decimal;
+  items: DeliveryItem[];
+}
+
+export interface Delivery {
+  id: string;
+  reference: string;
+  status: DeliveryStatus;
+  destination_name: string;
+  destination_address: string;
+  vehicle_id: string | null;
+  vehicle_plate: string | null;
+  driver_employee_id: string | null;
+  driver_name: string | null;
+  planned_departure: string | null;
+  departed_at: string | null;
+  delivered_at: string | null;
+  notes: string;
+  pallets: DeliveryPallet[];
+  total_units: Decimal;
+  created_at: string;
+  updated_at: string;
+}
+
 export type AttendanceEventType = "clock_in" | "clock_out" | "break_start" | "break_end";
 
 export interface AttendanceRecord {

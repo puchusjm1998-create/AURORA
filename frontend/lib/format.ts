@@ -275,3 +275,15 @@ export const attendanceStateMeta: Record<string, { tone: string; label: string }
   in: { tone: "success", label: "Trabajando" },
   break: { tone: "warning", label: "En pausa" },
 };
+
+export const deliveryStatusMeta: Record<string, { tone: string; label: string }> = {
+  draft: { tone: "neutral", label: "Borrador" },
+  preparing: { tone: "warning", label: "En preparación" },
+  ready: { tone: "info", label: "Listo para cargar" },
+  loaded: { tone: "info", label: "Cargado" },
+  in_transit: { tone: "accent", label: "En tránsito" },
+  delivered: { tone: "success", label: "Entregado" },
+  failed: { tone: "danger", label: "Fallido" },
+  returned: { tone: "warning", label: "Devuelto" },
+  cancelled: { tone: "neutral", label: "Cancelado" },
+};

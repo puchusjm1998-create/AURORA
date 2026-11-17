@@ -14,6 +14,7 @@ from app.api.routes import (
     reservations,
     system,
     attendance,
+    deliveries,
     incidents,
     optimization,
     tasks,
@@ -29,6 +30,7 @@ api_router.include_router(pallets.router)
 api_router.include_router(movements.router)
 api_router.include_router(reservations.router)
 api_router.include_router(attendance.router)
+api_router.include_router(deliveries.router)
 api_router.include_router(incidents.router)
 api_router.include_router(optimization.router)
 api_router.include_router(tasks.router)

@@ -308,7 +308,21 @@ gestiona repartos.
 | POST | `/invoices/{id}/lines` | Añadir línea (producto opcional) |
 | DELETE | `/invoices/{id}/lines/{line_id}` | Eliminar línea sin recepciones |
 | POST | `/invoices/{id}/reconcile` | Conciliar cantidades facturadas vs recibidas |
-| GET | `/invoices/{id}/ocr-status` | Estado del OCR (`not_configured` sin proveedor) |
+| GET | `/invoices/ocr/config` | Estado del motor OCR local y formatos admitidos |
+| POST | `/invoices/ocr/preview` | Multipart `file`: extrae campos y líneas sin registrar nada |
+| POST | `/invoices/{id}/extract` | Procesa el original guardado y persiste la extracción |
+| POST | `/invoices/{id}/lines/bulk` | Añade hasta 100 líneas revisadas en lote |
+| GET | `/invoices/{id}/ocr-status` | Estado del OCR de la factura |
+
+`POST /invoices` acepta además `lines_json` (lista revisada) y `ocr_reviewed=true` para crear la
+factura con las líneas propuestas por el OCR; el documento original se conserva intacto.
+
+El OCR es **local** (RapidOCR ONNX): los PDF con capa de texto se leen directamente; los escaneados
+y las imágenes se rasterizan a 180 ppp y se procesan sin salir del servidor. Devuelve proveedor,
+CIF, número, fechas, base, IVA, total y líneas, con `confidence` calculada por cobertura de campos
+y avisos cuando falta algo o la suma no coincide. Nunca crea líneas por sí solo: la persona revisa
+y confirma. Cada extracción guardada queda en `invoice_extractions` y en auditoría
+(`invoice.ocr_completed`).
 
 El original se guarda en `storage/invoices/AAAA/MM/DD/PROVEEDOR/FACTURA/<sha256[:12]>-NOMBRE`, se
 deduplica por SHA-256 y nunca se modifica. La conciliación marca `reconciled` o `discrepancy` y
@@ -419,3 +433,18 @@ contexto W3C `traceparent` entrante; las peticiones y consultas SQL se exportan 
 base de datos, almacenamiento y gauges de operación (palés, repartos, tareas, incidencias,
 reservas y unidades). Si `METRICS_TOKEN` está definido, exige `Authorization: Bearer <token>`;
 en caso contrario debe limitarse el acceso por red. El propio scrape no se contabiliza.
+
+## AURORA Voice
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/voice/status` | Motor, capacidades, idioma y garantía de que el audio no sale del dispositivo |
+| POST | `/voice/query` | `{text, locale}`: interpreta la transcripción y consulta datos reales |
+
+Intenciones: `product_location`, `product_not_found`, `low_stock`, `open_tasks`, `open_incidents`,
+`pending_deliveries`, `summary`, `forbidden` y `unknown`. Cada respuesta incluye `answer` en español,
+`data` estructurado, `suggestions` y `confidence`. El reconocimiento y la síntesis usan la Web
+Speech API del navegador; el servidor no recibe audio ni guarda el historial. Los permisos se
+comprueban por intención: un operario puede consultar stock pero no el resumen global de tareas.
+El proveedor es intercambiable con `VOICE_PROVIDER` (el incluido es `aurora-builtin`, local y
+determinista).

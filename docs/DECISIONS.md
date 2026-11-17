@@ -367,3 +367,46 @@ resuelven alertas automáticamente cuando el indicador vuelve a rango: la resolu
 dejar constancia. Los correos se envían en claro salvo STARTTLS/SSL y no hay reintentos: si el SMTP
 falla, la alerta queda visible con `notification_error` y el operador puede resolverla o repetir el
 envío. Las métricas se calculan sobre el inventario y la operación actual, sin ventanas históricas.
+
+---
+
+## D-33 · OCR local de facturas con revisión humana obligatoria
+
+**Decisión.** La extracción usa RapidOCR (ONNX, modelos incluidos) para imágenes y PDF escaneados,
+y la capa de texto de `pypdf` para PDF digitales; los PDF sin texto se rasterizan con PyMuPDF a
+180 ppp. El parser es propio para facturas españolas (CIF, número, fechas, base, IVA, total y
+líneas con cantidad/precio). El resultado es una propuesta con `confidence` calculada por cobertura
+de campos y avisos explícitos; nunca se crean líneas automáticamente. Cada extracción persistida
+guarda motor, método, confianza, texto y JSON, y deja auditoría.
+
+**Por qué.** Ningún documento fiscal sale del servidor y no hay claves ni coste por página. Funciona
+en el mismo contenedor sin servicios externos, y el flujo es honesto: la persona revisa antes de
+afectar a stock o conciliación. La confianza por cobertura evita presentar una probabilidad
+inventada del modelo.
+
+**Límites.** La calidad depende de la resolución y del diseño del documento; un OCR perfecto no es
+posible. Las líneas se reconocen por columnas numéricas al final de cada fila; tablas complejas,
+notas al pie o descuentos por línea pueden requerir corrección manual. Solo se procesan las
+primeras 5 páginas. El paquete OCR añade ~250 MB a la imagen Docker (ONNX + modelos + OpenCV), y
+se usa `opencv-python-headless` para no necesitar X11. No se soportan DOCX, XLSX ni correo entrante.
+
+---
+
+## D-34 · AURORA Voice con Web Speech API y NLU local
+
+**Decisión.** El navegador hace STT (`SpeechRecognition`, `es-ES`) y TTS (`SpeechSynthesis`,
+prefiriendo voces españolas femeninas cuando existen). El audio nunca llega al servidor: solo se
+envía el texto transcrito a `POST /voice/query`. El servidor interpreta intenciones con reglas
+locales y consulta stock, ubicaciones, mínimos, tareas, incidencias, repartos y resumen; respeta
+los permisos por intención y devuelve `data` estructurado, `confidence` y sugerencias. El proveedor
+es intercambiable con `VOICE_PROVIDER`, pero el incluido es determinista y no inventa respuestas.
+
+**Por qué.** Evita claves de terceros, coste por minuto y enviar conversaciones fuera de la empresa.
+Las respuestas se calculan sobre la misma base de datos que la operación, así que son verificables.
+La UI ofrece siempre entrada de texto: la voz es una comodidad, no un requisito.
+
+**Límites.** La disponibilidad y la voz concreta dependen del navegador y del sistema operativo; en
+navegadores sin Web Speech API solo funciona el texto. No hay conversación multi-turno con memoria,
+ni preguntas abiertas fuera de las intenciones cubiertas (devuelve `unknown` con sugerencias). No
+se guarda historial ni audio, lo que también impide auditar las consultas de voz. El NLU no es un
+LLM: sinónimos y frases muy libres pueden caer en `unknown`.

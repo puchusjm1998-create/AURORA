@@ -358,6 +358,30 @@ Prueba recomendada antes de producción: cree una programación con su propia cu
 **Enviar** y confirme que el adjunto (PDF/Excel/CSV) llega y abre correctamente. El flujo completo
 está cubierto por pruebas automatizadas contra un servidor SMTP local.
 
+### OCR local de facturas
+
+El OCR funciona dentro del contenedor: no requiere claves ni servicios externos. Compruebe el motor
+tras desplegar:
+
+```bash
+curl -s -b cookies.txt https://aurora.ejemplo.es/api/v1/invoices/ocr/config
+```
+
+Debe devolver `available: true` y `external_service: false`. La imagen incluye RapidOCR (ONNX),
+PyMuPDF y OpenCV headless; reserve al menos 1 GB de RAM para procesar páginas a 180 ppp y mantenga
+`MAX_UPLOAD_MB` en un valor razonable (25 MB por defecto). Los documentos se procesan en un archivo
+temporal que se borra al terminar; solo se persiste el original inmutable y el JSON de extracción.
+Si el motor no está disponible, la API devuelve `available: false` y las líneas siguen pudiendo
+introducirse a mano.
+
+### AURORA Voice
+
+No hay nada que configurar para usar la voz: el dictado y la lectura ocurren en el navegador del
+usuario. `VOICE_PROVIDER=aurora-builtin` (por defecto) y `VOICE_LOCALE=es-ES` pueden ajustarse en
+`.env`. El micrófono exige contexto seguro (HTTPS o `localhost`); en HTTP el navegador lo bloquea.
+El servidor solo recibe el texto de la consulta y no guarda audio ni historial. Si el navegador no
+soporta Web Speech API, la página `/voz` mantiene la entrada de texto.
+
 ### Evaluación de alertas
 
 Las reglas se evalúan con un trabajo independiente; crear alertas es el resultado normal de una

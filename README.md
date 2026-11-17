@@ -42,7 +42,7 @@ valida permisos en el servidor y registra cada operación en un libro de auditor
 Además: facturas con documento original inmutable, conciliación, personal y cuentas con RBAC de
 5 niveles, auditoría append-only, informes CSV y página de transparencia `/sistema`.
 
-### Fases 2 a 8 entregadas
+### Fases 2 a 14 entregadas
 
 | Funcionalidad | Estado | Dónde |
 |---|---|---|
@@ -61,16 +61,16 @@ Además: facturas con documento original inmutable, conciliación, personal y cu
 | Informes programados por correo | ✅ | `/informes` (cadencia, destinatarios, historial y envío con cron) |
 | Trazas OpenTelemetry | ✅ | `AURORA_TRACING_ENABLED=true` (OTLP/consola, `X-Trace-ID`, SQL instrumentado) |
 | Alertas gestionadas | ✅ | `/alertas` (reglas por umbral, cooldown, reconocimiento, resolución y correo) |
+| OCR local de facturas | ✅ | `/facturas` (PDF/imagen, proveedor, fechas, totales y líneas; revisión humana) |
+| AURORA Voice | ✅ | `/voz` (dictado y lectura del navegador; respuestas con datos reales, sin audio fuera del dispositivo) |
 
 ### Lo que todavía no está implementado (y no se muestra como si lo estuviera)
 
 Estas capacidades pertenecen a fases posteriores y dependen de proveedores externos. La interfaz
 las identifica explícitamente:
 
-- **AURORA Voice** (Fase 5): STT/TTS con voz femenina española, asistente conversacional y LLM
-  intercambiable. No hay micrófono simulado.
-- **OCR de facturas** (Fase 4): requiere proveedor externo; hoy las líneas se introducen y revisan
-  manualmente. El estado se muestra como `not_configured`.
+- **LLM conversacional y voz neuronal** (Fase 5 ampliada): AURORA Voice usa la Web Speech API del
+  navegador y un motor local de consultas; no hay modelo de lenguaje externo ni claves de terceros.
 - **Almacenamiento S3** (Fase 4): los originales se guardan ya de forma inmutable en disco local con
   estructura y SHA-256; el adaptador S3 queda pendiente.
 - **Redis/Celery** (Fase 4+): trabajos asíncronos (informes programados, notificaciones). Las
@@ -157,7 +157,7 @@ backend/
     db/            bootstrap, triggers de inmutabilidad
   alembic/         migraciones versionadas
   scripts/         seed_demo.py, backup.py, smoke_test.py y load_test.py
-  tests/           73 pruebas automatizadas
+  tests/           79 pruebas automatizadas
 frontend/
   app/             rutas App Router (login y área autenticada)
   components/      design system, shell, selectores, escáner QR
@@ -239,12 +239,13 @@ cd backend
 ../.venv/bin/python -m pytest tests -q
 ```
 
-Resultado actual: **73 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
+Resultado actual: **79 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
 etiquetas, escaneo, facturas, mapa del almacén, reservas —incluida su caducidad—, tareas de
 almacén, incidencias, fichaje —secuencias y resumen de horas—, optimización de ubicaciones y
 rutas, repartos con expedición de stock, informes, auditoría y herramientas de operación: copia
-con manifiesto SHA-256, retención y restauración, e informes PDF/Excel con contenido verificado, métricas Prometheus, envío SMTP con un servidor local de prueba, trazas OpenTelemetry y alertas
-gestionadas con evaluación, reconocimiento y notificación).
+con manifiesto SHA-256, retención y restauración, e informes PDF/Excel con contenido verificado, métricas Prometheus, envío SMTP con un servidor local de prueba, trazas OpenTelemetry, alertas
+gestionadas con evaluación, reconocimiento y notificación, OCR local sobre PDF e imagen y consultas
+de voz con permisos).
 Las pruebas usan una base de datos SQLite
 temporal por ejecución; nunca tocan datos reales.
 

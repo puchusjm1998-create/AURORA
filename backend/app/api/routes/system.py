@@ -37,11 +37,11 @@ IMPLEMENTED = [
     "Informes programados por correo con historial de envío y ejecución desde cron",
     "Trazas OpenTelemetry de peticiones y SQL enmascaradas, con contexto W3C y X-Trace-ID",
     "Alertas gestionadas: reglas sobre indicadores reales, cooldown, reconocimiento y resolución",
+    "OCR local de facturas en PDF o imagen, con propuesta de campos y revisión humana",
+    "AURORA Voice: dictado y lectura en el navegador con consultas reales de stock, tareas y repartos",
 ]
 
 PENDING = [
-    "Fase 4: OCR automático de facturas (requiere proveedor externo configurado)",
-    "Fase 5: AURORA Voice (reconocimiento y síntesis de voz, IA intercambiable)",
     "Fase 6: calibración fina con plano real, tiempos medidos y turnos de trabajo",
     "Fase 7: tarjetas digitales NFC, planificación de turnos y bolsa de horas",
     "Fase 8: integración telefónica SIP/API, seguimiento GPS y firma de entrega",
@@ -57,7 +57,7 @@ def system_info() -> SystemInfo:
         demo_mode=settings.demo_mode,
         server_time_utc=utcnow().isoformat().replace("+00:00", "Z"),
         warehouse_timezone=settings.warehouse_timezone,
-        phase="Fases 1-3, 6-14: operación de almacén con observabilidad y alertas gestionadas",
+        phase="Fases 1-14: operación de almacén, observabilidad, alertas, OCR y asistente de voz",
         implemented=IMPLEMENTED,
         pending=PENDING,
     )

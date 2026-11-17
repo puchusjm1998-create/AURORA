@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     def smtp_configured(self) -> bool:
         return bool(self.smtp_host.strip())
 
+    # --- Voz ----------------------------------------------------------------
+    voice_provider: str = "aurora-builtin"
+    voice_locale: str = "es-ES"
+
     # --- Domain -------------------------------------------------------------
     warehouse_timezone: str = "Europe/Madrid"
     # Acepta DEMO_MODE y AURORA_DEMO_MODE para no romper despliegues previos.

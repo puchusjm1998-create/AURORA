@@ -164,7 +164,13 @@ function PalletDetail() {
               <IconPrint /> Etiqueta
             </Link>
             {can("pallets.write") && editable ? (
-              <button type="button" className="btn btn-primary" onClick={() => setAddOpen(true)}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setAddOpen(true)}
+                disabled={!data.location_code}
+                title={data.location_code ? undefined : "Asigne una ubicación al palé antes de añadir mercancía"}
+              >
                 Añadir mercancía
               </button>
             ) : null}
@@ -192,6 +198,15 @@ function PalletDetail() {
             <QrPreview payload={payload} code={data.code} />
           </div>
           {data.notes ? <p className="small text-soft">{data.notes}</p> : null}
+          {!data.location_code ? (
+            <div className="alert warning">
+              <strong>Palé sin ubicación</strong>
+              <span>
+                Para recibir mercancía en este palé primero debe estar ubicado en una posición del almacén.
+                Use «Reubicar» o cree otro palé indicando la ubicación.
+              </span>
+            </div>
+          ) : null}
           {can("pallets.write") ? (
             <div className="row" style={{ gap: 8 }}>
               {editable && data.items.length > 0 ? (

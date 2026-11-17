@@ -129,7 +129,7 @@ backend/
     db/            bootstrap, triggers de inmutabilidad
   alembic/         migraciones versionadas
   scripts/         seed_demo.py (dataset de demostración aislado)
-  tests/           33 pruebas automatizadas
+  tests/           34 pruebas automatizadas
 frontend/
   app/             rutas App Router (login y área autenticada)
   components/      design system, shell, selectores, escáner QR
@@ -211,7 +211,7 @@ cd backend
 ../.venv/bin/python -m pytest tests -q
 ```
 
-Resultado actual: **33 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
+Resultado actual: **34 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
 etiquetas, escaneo, facturas, mapa del almacén, informes y auditoría). Las pruebas usan una base de
 datos SQLite temporal por ejecución; nunca tocan datos reales.
 

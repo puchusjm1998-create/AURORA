@@ -10,7 +10,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -54,11 +54,21 @@ class Settings(BaseSettings):
 
     # --- Domain -------------------------------------------------------------
     warehouse_timezone: str = "Europe/Madrid"
-    demo_mode: bool = False
+    # Acepta DEMO_MODE y AURORA_DEMO_MODE para no romper despliegues previos.
+    demo_mode: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("AURORA_DEMO_MODE", "DEMO_MODE", "demo_mode"),
+    )
 
     # --- Bootstrap ----------------------------------------------------------
-    run_migrations: bool = True
-    bootstrap: bool = True
+    run_migrations: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("AURORA_RUN_MIGRATIONS", "RUN_MIGRATIONS", "run_migrations"),
+    )
+    bootstrap: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("AURORA_BOOTSTRAP", "BOOTSTRAP", "bootstrap"),
+    )
 
     @field_validator("database_url")
     @classmethod

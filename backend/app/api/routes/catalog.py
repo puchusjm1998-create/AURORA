@@ -156,6 +156,9 @@ def list_products(
                 Product.name.ilike(term),
                 Product.manufacturer_ref.ilike(term),
                 Product.barcode.ilike(term),
+                Product.supplier_id.in_(
+                    select(Supplier.id).where(Supplier.name.ilike(term))
+                ),
             )
         )
     if category:

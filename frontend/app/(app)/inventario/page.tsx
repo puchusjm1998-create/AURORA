@@ -44,6 +44,8 @@ export default function InventoryPage() {
   const [category, setCategory] = useState("");
   const [supplier, setSupplier] = useState("");
   const [tracking, setTracking] = useState("");
+  const [invoice, setInvoice] = useState("");
+  const [locationCode, setLocationCode] = useState("");
   const [lowStock, setLowStock] = useState(false);
   const [offset, setOffset] = useState(0);
   const debounced = useDebounced(search, 280);
@@ -56,11 +58,13 @@ export default function InventoryPage() {
         category: category || null,
         supplier_id: supplier || null,
         tracking_mode: tracking || null,
+        invoice_number: invoice.trim() || null,
+        location_code: locationCode.trim() || null,
         low_stock: lowStock ? true : null,
         limit: LIMIT,
         offset,
       }),
-    [debounced, category, supplier, tracking, lowStock, offset],
+    [debounced, category, supplier, tracking, invoice, locationCode, lowStock, offset],
   );
   const { data, error, loading, reload } = useApi<Page<Product>>(query);
 
@@ -110,7 +114,7 @@ export default function InventoryPage() {
           <SearchInput
             value={search}
             onChange={(value) => resetTo(() => setSearch(value))}
-            placeholder="Buscar por SKU, nombre, referencia o código de barras…"
+            placeholder="Buscar por SKU, nombre, referencia, barras o proveedor…"
           />
           <select
             className="select"
@@ -149,6 +153,22 @@ export default function InventoryPage() {
             <option value="batch">Lote</option>
             <option value="unit">Unidad individual</option>
           </select>
+          <input
+            className="input"
+            value={invoice}
+            onChange={(event) => resetTo(() => setInvoice(event.target.value))}
+            placeholder="Nº de factura"
+            aria-label="Buscar por número de factura"
+            style={{ width: 150 }}
+          />
+          <input
+            className="input mono"
+            value={locationCode}
+            onChange={(event) => resetTo(() => setLocationCode(event.target.value.toUpperCase()))}
+            placeholder="ALM-01-P04-EB-N02-POS03"
+            aria-label="Buscar por ubicación exacta"
+            style={{ width: 230 }}
+          />
           <label className="check" style={{ marginLeft: 2 }}>
             <input
               type="checkbox"

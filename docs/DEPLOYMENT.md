@@ -122,6 +122,10 @@ WantedBy=multi-user.target
 | `AURORA_ADMIN_EMAIL/PASSWORD/NAME` | Primer arranque | Cuenta administradora inicial |
 | `DEMO_MODE` | No | Marca la interfaz como demostración; nunca en producción |
 | `METRICS_TOKEN` | No | Si se define, `/metrics` exige `Authorization: Bearer <token>` |
+| `AURORA_TRACING_ENABLED` | No | Activa trazas OpenTelemetry (`false` por defecto) |
+| `AURORA_TRACING_EXPORTER` | No | `otlp` (por defecto) o `console` para desarrollo |
+| `AURORA_TRACING_SAMPLE_RATIO` | No | Ratio de muestreo (0.2 por defecto) |
+| `OTLP_ENDPOINT` | No | Endpoint OTLP/HTTP; vacío usa `OTEL_EXPORTER_OTLP_ENDPOINT` |
 | `SMTP_HOST/PORT` | Para informes | Servidor de correo saliente (por defecto 587) |
 | `SMTP_USER/PASSWORD` | No | Autenticación SMTP si el servidor la exige |
 | `SMTP_FROM` | Para informes | Remitente de los informes programados |
@@ -353,6 +357,26 @@ algún envío falla y con 0 si todo va bien; use ese código para alertar. Cada 
 Prueba recomendada antes de producción: cree una programación con su propia cuenta, pulse
 **Enviar** y confirme que el adjunto (PDF/Excel/CSV) llega y abre correctamente. El flujo completo
 está cubierto por pruebas automatizadas contra un servidor SMTP local.
+
+### Trazas OpenTelemetry
+
+Active las trazas solo si hay un colector OTLP disponible:
+
+```bash
+export AURORA_TRACING_ENABLED=true
+export AURORA_TRACING_EXPORTER=otlp
+export AURORA_TRACING_SAMPLE_RATIO=0.2
+export OTLP_ENDPOINT=http://otel-collector:4318/v1/traces
+```
+
+Cualquier colector compatible con OTLP/HTTP sirve (OpenTelemetry Collector, Grafana Alloy, Tempo,
+Jaeger). Para depurar sin colector use `AURORA_TRACING_EXPORTER=console`: los spans se escriben en
+el log con nombre, duración, atributos HTTP y consultas SQL. Compruebe que la respuesta incluye
+`X-Trace-ID` y que el colector recibe el servicio `aurora-logistics-ai`.
+
+Las consultas SQL se instrumentan sin comentarios añadidos al SQL; el nombre del span es la
+sentencia. El planificador externo (`scripts/send_scheduled_reports.py`) no está instrumentado por
+ahora: su resultado queda en la tabla de programaciones y en la auditoría.
 
 ### Prueba de humo y carga tras cada despliegue
 

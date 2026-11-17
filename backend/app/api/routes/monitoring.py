@@ -14,6 +14,7 @@ from app.core import metrics as registry
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.enums import IncidentStatus, ReservationStatus, TaskStatus
+from app.core.tracing import tracing_status
 from app.models import Delivery, Incident, Pallet, StockLevel, StockReservation, Task
 
 logger = logging.getLogger("aurora.metrics")
@@ -115,6 +116,7 @@ def business_gauges() -> list[tuple[str, str, list[tuple[dict[str, str], float]]
         ("aurora_storage_files", "Número de ficheros en el volumen de documentos.",
          [({}, float(storage_files))]),
         ("aurora_metrics_protected", "1 si /metrics exige token Bearer.", [({}, 0.0 if not settings.metrics_token else 1.0)]),
+        ("aurora_tracing_enabled", "1 si las trazas OpenTelemetry están activas.", [({}, 1.0 if tracing_status()["active"] else 0.0)]),
         ("aurora_info", "Versión y entorno del despliegue.",
          [({"version": settings.app_version, "environment": settings.environment,
             "demo_mode": "true" if settings.demo_mode else "false"}, 1.0)]),

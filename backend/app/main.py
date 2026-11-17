@@ -24,6 +24,8 @@ from app.api.router import api_router
 from app.api.routes import monitoring
 from app.core import metrics as metrics_registry
 from app.core.config import REPO_DIR, get_settings
+from app.core.db import engine
+from app.core.tracing import configure_tracing, current_trace_id, shutdown_tracing
 from app.core.errors import AppError
 from app.core.timeutils import utcnow
 
@@ -116,6 +118,9 @@ async def request_context(request: Request, call_next) -> Response:
     finally:
         metrics_registry.request_finished()
     elapsed_ms = (time.perf_counter() - started) * 1000
+    trace_id = current_trace_id()
+    if trace_id:
+        response.headers["X-Trace-ID"] = trace_id
     if request.url.path != "/metrics":
         metrics_registry.observe_request(
             request.method, _route_template(request), response.status_code, elapsed_ms / 1000
@@ -135,6 +140,8 @@ async def request_context(request: Request, call_next) -> Response:
             elapsed_ms,
             request_id,
         )
+        if trace_id:
+            logger.info("traza %s para %s", trace_id, request.url.path)
     return response
 
 
@@ -199,6 +206,8 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
         },
     )
 
+
+configure_tracing(app, engine=engine)
 
 app.include_router(api_router)
 app.include_router(monitoring.router)

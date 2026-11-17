@@ -323,3 +323,23 @@ terceros. Los destinatarios y el contenido quedan en auditoría.
 apertura, ni plantillas corporativas configurables. La hora se guarda en UTC y el frontend la
 muestra tal cual (se indica Europe/Madrid en la ayuda). Las alertas basadas en fallos de envío
 dependen del orquestador (código de salida del script).
+
+---
+
+## D-31 · Trazas OpenTelemetry opcionales con exportador estándar
+
+**Decisión.** La instrumentación usa los paquetes oficiales de OpenTelemetry para FastAPI y
+SQLAlchemy y un `TracerProvider` con muestreo parental por ratio (20 % por defecto). Se activa con
+`AURORA_TRACING_ENABLED=true`; el exportador es OTLP/HTTP (endpoint propio o variables estándar
+`OTEL_EXPORTER_OTLP_*`) o consola para desarrollo. Cada respuesta con traza activa lleva
+`X-Trace-ID` y se respeta el `traceparent` W3C de entrada; `/metrics` y `/healthz` quedan excluidos
+para no ensuciar las trazas. Las trazas se apagan al cerrar la aplicación (flush del proveedor).
+
+**Por qué.** Con un colector OTLP estándar (Jaeger, Tempo, Grafana Alloy…) no hay que inventar un
+formato propio ni acoplar la aplicación a un proveedor. El coste es cero cuando está desactivado,
+porque no se registra middleware ni se crea proveedor. El 100 % de muestreo se reserva para
+depuración local; en producción se limita el volumen.
+
+**Límites.** No se instrumenta el cliente SMTP ni trabajos externos (el planificador se ejecuta en
+otro proceso y puede instrumentarse después). Sin colector configurado, el exportador OTLP falla
+silenciosamente al enviar y no bloquea la aplicación. No hay propagación de baggage de negocio.

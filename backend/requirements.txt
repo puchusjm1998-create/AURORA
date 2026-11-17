@@ -11,6 +11,9 @@ qrcode==8.2
 pillow==13.0.0
 reportlab==5.1.0
 openpyxl==3.1.5
+opentelemetry-sdk==1.45.2
+opentelemetry-exporter-otlp-proto-http==1.45.2
+opentelemetry-instrumentation-fastapi==0.66b2
 python-multipart==0.0.34
 python-dateutil==4.0.0
 

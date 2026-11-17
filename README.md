@@ -59,6 +59,7 @@ Además: facturas con documento original inmutable, conciliación, personal y cu
 | Informes PDF y Excel nativos | ✅ | `/informes` (PDF paginado, Excel con resumen y totales) |
 | Métricas Prometheus | ✅ | `/metrics` (HTTP, latencias, base, almacenamiento y operación) |
 | Informes programados por correo | ✅ | `/informes` (cadencia, destinatarios, historial y envío con cron) |
+| Trazas OpenTelemetry | ✅ | `AURORA_TRACING_ENABLED=true` (OTLP/consola, `X-Trace-ID`, SQL instrumentado) |
 
 ### Lo que todavía no está implementado (y no se muestra como si lo estuviera)
 
@@ -75,7 +76,7 @@ las identifica explícitamente:
   tareas de almacén de la Fase 2 ya son reales, pero se ejecutan de forma síncrona.
 - **Telefonía SIP/API, GPS de repartos y firma digital de entrega** (Fase 8); **tarjetas NFC,
   turnos planificados y bolsa de horas** (Fase 7). Los repartos ya expiden stock real.
-- **Trazas OpenTelemetry y alertas gestionadas** (fases posteriores); las métricas Prometheus y
+- **Alertas gestionadas** (siguiente fase); las trazas OpenTelemetry, las métricas Prometheus y
   los informes programados por SMTP ya son reales, y la operación incluye copias verificables,
   humo y carga.
 - **Calibración del modelo de distancias** con el plano real del almacén y tiempos medidos (Fase 6
@@ -156,7 +157,7 @@ backend/
     db/            bootstrap, triggers de inmutabilidad
   alembic/         migraciones versionadas
   scripts/         seed_demo.py, backup.py, smoke_test.py y load_test.py
-  tests/           65 pruebas automatizadas
+  tests/           69 pruebas automatizadas
 frontend/
   app/             rutas App Router (login y área autenticada)
   components/      design system, shell, selectores, escáner QR
@@ -238,11 +239,11 @@ cd backend
 ../.venv/bin/python -m pytest tests -q
 ```
 
-Resultado actual: **65 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
+Resultado actual: **69 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
 etiquetas, escaneo, facturas, mapa del almacén, reservas —incluida su caducidad—, tareas de
 almacén, incidencias, fichaje —secuencias y resumen de horas—, optimización de ubicaciones y
 rutas, repartos con expedición de stock, informes, auditoría y herramientas de operación: copia
-con manifiesto SHA-256, retención y restauración, e informes PDF/Excel con contenido verificado, métricas Prometheus y envío SMTP con un servidor local de prueba).
+con manifiesto SHA-256, retención y restauración, e informes PDF/Excel con contenido verificado, métricas Prometheus envío SMTP con un servidor local de prueba y trazas OpenTelemetry).
 Las pruebas usan una base de datos SQLite
 temporal por ejecución; nunca tocan datos reales.
 

@@ -35,6 +35,7 @@ IMPLEMENTED = [
     "Informes nativos en PDF paginado y Excel con resumen, filtros y totales",
     "Métricas Prometheus en /metrics: HTTP, latencias, base, almacenamiento y operación",
     "Informes programados por correo con historial de envío y ejecución desde cron",
+    "Trazas OpenTelemetry de peticiones y SQL enmascaradas, con contexto W3C y X-Trace-ID",
 ]
 
 PENDING = [
@@ -43,7 +44,7 @@ PENDING = [
     "Fase 6: calibración fina con plano real, tiempos medidos y turnos de trabajo",
     "Fase 7: tarjetas digitales NFC, planificación de turnos y bolsa de horas",
     "Fase 8: integración telefónica SIP/API, seguimiento GPS y firma de entrega",
-    "Fase 13: trazas distribuidas OpenTelemetry y alertas gestionadas en la aplicación",
+    "Fase 14: alertas gestionadas con reglas, reconocimiento y notificación",
 ]
 
 

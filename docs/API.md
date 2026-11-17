@@ -390,6 +390,9 @@ La auditoría es append-only: triggers de base de datos rechazan `UPDATE` y `DEL
 
 `/healthz` (fuera de `/api`) es el endpoint ligero para balanceadores y contenedores.
 
+Con `AURORA_TRACING_ENABLED=true`, cada respuesta incluye `X-Trace-ID` (32 hex) y se acepta el
+contexto W3C `traceparent` entrante; las peticiones y consultas SQL se exportan por OTLP o consola.
+
 `GET /metrics` (fuera de `/api`, formato Prometheus 0.0.4) expone contadores y latencias HTTP,
 base de datos, almacenamiento y gauges de operación (palés, repartos, tareas, incidencias,
 reservas y unidades). Si `METRICS_TOKEN` está definido, exige `Authorization: Bearer <token>`;

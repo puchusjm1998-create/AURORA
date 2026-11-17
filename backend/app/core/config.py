@@ -47,6 +47,26 @@ class Settings(BaseSettings):
     #: Si se define, /metrics exige "Authorization: Bearer <token>".
     metrics_token: str = ""
 
+    # --- Trazas OpenTelemetry ------------------------------------------------
+    tracing_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("AURORA_TRACING_ENABLED", "TRACING_ENABLED", "tracing_enabled"),
+    )
+    tracing_exporter: str = Field(
+        default="otlp",
+        validation_alias=AliasChoices("AURORA_TRACING_EXPORTER", "TRACING_EXPORTER", "tracing_exporter"),
+    )
+    tracing_sample_ratio: float = Field(
+        default=0.2,
+        validation_alias=AliasChoices(
+            "AURORA_TRACING_SAMPLE_RATIO", "TRACING_SAMPLE_RATIO", "tracing_sample_ratio"
+        ),
+    )
+    tracing_service_name: str = "aurora-logistics-ai"
+    otlp_endpoint: str = Field(
+        default="", validation_alias=AliasChoices("OTLP_ENDPOINT", "otlp_endpoint")
+    )
+
     # --- CORS (only needed when the frontend runs on another origin, i.e. next dev)
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 

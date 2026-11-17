@@ -70,7 +70,9 @@ export default function ReservationsPage() {
 
   const positions = useMemo(
     () =>
-      (whereabouts.data?.positions ?? [])
+      (whereabouts.data && whereabouts.data.product.id === product?.id
+        ? whereabouts.data.positions
+        : [])
         .filter((position) => Number(position.available_quantity) > 0)
         .map((position) => ({
           key: `${position.location_id}|${position.pallet_id ?? ""}`,
@@ -80,7 +82,7 @@ export default function ReservationsPage() {
           palletCode: position.pallet_code,
           available: Number(position.available_quantity),
         })),
-    [whereabouts.data],
+    [whereabouts.data, product?.id],
   );
   const selected = positions.find((position) => position.key === positionKey) ?? null;
 

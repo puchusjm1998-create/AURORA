@@ -27,6 +27,7 @@ backend/data/*.db-journal
 backend/data/*.db-wal
 backend/data/*.db-shm
 backend/data/storage/
+backend/backups/
 *.sqlite3
 
 # Sistema operativo / editores

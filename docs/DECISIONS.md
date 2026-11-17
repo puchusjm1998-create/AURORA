@@ -241,3 +241,24 @@ movimiento parcial y la carga falla con un error explicable. Los palés pasan a 
 desvinculan de la ubicación; al entregar quedan `shipped`. Un palé solo puede pertenecer a un
 reparto activo, y cancelar antes de cargar lo libera, de modo que el flujo no bloquea la operación.
 Después de cargar, el reparto es inmutable salvo por los hitos del transporte, que se auditan.
+
+---
+
+## D-27 · Copias con manifiesto y medición real de la operación
+
+**Decisión.** La copia de seguridad la realiza `scripts/backup.py`, no una tarea manual: usa la API
+de backup de SQLite o `pg_dump -Fc` para PostgreSQL, archiva el volumen de documentos y escribe un
+`manifest.json` con tamaño y SHA-256 de cada pieza. Antes de dar una copia por buena se verifica
+(`--verify`) y la restauración exige `--force` para no sobrescribir una base viva. La retención se
+aplica sobre directorios fechados `aurora-<UTC>-<etiqueta>`.
+
+**Por qué.** Una copia que no se ha restaurado no es una copia. El manifiesto convierte la
+integridad en un dato comprobable y el mismo script sirve en local y en Docker, sin introducir
+dependencias nuevas en la aplicación. Para medir el servicio se añaden dos herramientas separadas
+de `pytest`: `smoke_test.py` (salud, login y lecturas de todos los módulos, más el frontend) y
+`load_test.py` (usuarios concurrentes, errores, RPS y percentiles p50/p95/p99 solo con lecturas).
+
+**Límites.** En PostgreSQL la copia depende de `pg_dump`/`pg_restore` instalados en el contenedor o
+en el host; con SQLite la copia en caliente es consistente, pero el tráfico concurrente puede
+introducir latencia (las cifras locales de referencia se obtuvieron con 6 usuarios y 6 s). No hay
+métricas Prometheus/OpenTelemetry ni alertas automáticas: `/sistema` lo mantiene como pendiente.

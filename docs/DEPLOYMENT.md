@@ -172,6 +172,45 @@ base real antes de producción.
 
 ## 5. Copias de seguridad y restauración
 
+### 5.1 Copia verificable con `scripts/backup.py`
+
+El script empaqueta en `backups/aurora-<fecha>-<etiqueta>/` la base de datos, el volumen de
+documentos y un `manifest.json` con tamaños y SHA-256 de cada fichero. Con SQLite usa la API de
+backup del motor (copia consistente con la base en uso); con PostgreSQL ejecuta `pg_dump -Fc`.
+
+```bash
+cd backend
+../.venv/bin/python -m scripts.backup --label diaria --keep 14
+../.venv/bin/python -m scripts.backup --list
+../.venv/bin/python -m scripts.backup --verify backups/aurora-20261117T030000Z-diaria
+```
+
+En Docker:
+
+```bash
+docker compose exec -T api python -m scripts.backup --output /data/backups --label diaria --keep 14
+```
+
+Programe la copia a diario con cron (`0 3 * * *`) o un timer de systemd, cifre el directorio y
+guárdelo fuera del servidor. La retención (`--keep`) elimina las copias más antiguas.
+
+### 5.2 Restauración
+
+Pare el servicio, verifique la copia y restáurela. La restauración exige `--force` si el destino
+ya existe, para evitar sobrescrituras accidentales:
+
+```bash
+docker compose stop api
+cd backend
+../.venv/bin/python -m scripts.backup --restore backups/aurora-20261117T030000Z-diaria --force
+docker compose start api
+```
+
+El script rechaza rutas inseguras dentro del tar y conserva la base anterior solo si se copia a
+mano antes: haga siempre una copia del estado actual antes de restaurar.
+
+### 5.3 Copia manual equivalente (sin el script)
+
 **Base de datos**
 
 ```bash
@@ -185,8 +224,7 @@ docker run --rm -v aurora_aurora-storage:/data -v "$PWD":/backup alpine \
   tar czf /backup/aurora-storage-$(date +%F).tar.gz -C /data .
 ```
 
-Programe ambas tareas a diario, cifre los archivos y guárdelos fuera del servidor con retención
-definida por la empresa. **Pruebe la restauración** al menos una vez al trimestre:
+En cualquier caso, **pruebe la restauración** al menos una vez al trimestre:
 
 ```bash
 docker compose stop api
@@ -209,6 +247,22 @@ guarda nada fuera de sus volúmenes.
 - Logs de la aplicación en JSON/lineal según el driver; envíe a su agregador (Loki, CloudWatch…).
 - Alertas sugeridas: healthcheck fallando, errores 5xx, espacio en disco del volumen de documentos,
   intentos de login fallidos repetidos.
+
+### Prueba de humo y carga tras cada despliegue
+
+```bash
+cd backend
+../.venv/bin/python -m scripts.smoke_test --base-url https://aurora.example.com \
+  --email admin@aurora.demo --password 'CAMBIAR'
+../.venv/bin/python -m scripts.load_test --base-url https://aurora.example.com \
+  --concurrency 8 --duration 20 --max-error-rate 0.01
+```
+
+`smoke_test.py` comprueba salud, login y las lecturas de todos los módulos, más la entrega del
+frontend; devuelve código 1 si algo falla. `load_test.py` mide RPS y percentiles reales solo con
+lecturas y falla si supera la tasa de error indicada. Referencia medida en local (SQLite, 6
+usuarios, 6 s): 471 peticiones, 0 errores, 83 req/s, p50 57 ms, p95 180 ms, p99 253 ms; en
+producción con PostgreSQL los valores deben obtenerse contra el servidor real y registrarse.
 
 ### Mantenimiento
 
@@ -245,7 +299,7 @@ guarda nada fuera de sus volúmenes.
 | Redis + Celery | Fase 4+ | Tareas asíncronas, informes programados |
 | OCR de facturas | Fase 4 | Proveedor externo; sin él las líneas son manuales |
 | AURORA Voice (STT/TTS/LLM) | Fase 5 | Voz femenina española; proveedor intercambiable |
-| Telefonía SIP/API | Fase 8 | Requiere operador y credenciales |
-| Repartos y fichaje | Fase 7 | Módulo móvil de rutas y control horario |
+| Telefonía SIP/API y GPS de repartos | Fase 8 | Requiere operador, credenciales y dispositivo |
+| Monitorización externa (Prometheus/OpenTelemetry) | Fase 9 | Endpoints de métricas y trazas |
 
 Ninguna de estas piezas se simula en la entrega actual: `/sistema` muestra su estado real.

@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     login_max_attempts: int = 8
     login_window_seconds: int = 300
+    #: Si se define, /metrics exige "Authorization: Bearer <token>".
+    metrics_token: str = ""
 
     # --- CORS (only needed when the frontend runs on another origin, i.e. next dev)
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"

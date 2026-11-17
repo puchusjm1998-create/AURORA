@@ -121,6 +121,7 @@ WantedBy=multi-user.target
 | `AURORA_RUN_MIGRATIONS` | No | Aplica Alembic al arrancar |
 | `AURORA_ADMIN_EMAIL/PASSWORD/NAME` | Primer arranque | Cuenta administradora inicial |
 | `DEMO_MODE` | No | Marca la interfaz como demostración; nunca en producción |
+| `METRICS_TOKEN` | No | Si se define, `/metrics` exige `Authorization: Bearer <token>` |
 | `STORAGE_DIR` | No | Ruta de documentos originales (volumen persistente) |
 | `MAX_UPLOAD_MB` | No | Tamaño máximo por factura (25 por defecto) |
 | `WAREHOUSE_TIMEZONE` | No | `Europe/Madrid` |
@@ -247,6 +248,74 @@ guarda nada fuera de sus volúmenes.
 - Logs de la aplicación en JSON/lineal según el driver; envíe a su agregador (Loki, CloudWatch…).
 - Alertas sugeridas: healthcheck fallando, errores 5xx, espacio en disco del volumen de documentos,
   intentos de login fallidos repetidos.
+
+### Métricas Prometheus
+
+`GET /metrics` expone el formato de texto Prometheus 0.0.4. Series principales:
+
+- `aurora_http_requests_total{method,route,status}` y `aurora_http_request_duration_seconds`
+  (histograma con cubos de 5 ms a 10 s). Las rutas usan plantilla (`{product_id}`), no ids.
+- `aurora_http_requests_in_flight`, `aurora_process_start_time_seconds` y `aurora_info`.
+- `aurora_database_up`, `aurora_storage_bytes`, `aurora_storage_files`.
+- `aurora_pallets_total{status}`, `aurora_deliveries_total{status}`, `aurora_tasks_open`,
+  `aurora_incidents_open`, `aurora_reservations_active`, `aurora_stock_units_total`.
+
+Configure el scrape (por ejemplo en `prometheus.yml`). Si define `METRICS_TOKEN`, use la misma
+credencial en `authorization`:
+
+```yaml
+scrape_configs:
+  - job_name: aurora
+    scrape_interval: 30s
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials: <METRICS_TOKEN>
+    static_configs:
+      - targets: ["aurora:8000"]
+```
+
+Reglas de alerta listas para copiar (`aurora.rules.yml`):
+
+```yaml
+groups:
+  - name: aurora
+    rules:
+      - alert: AuroraDown
+        expr: up{job="aurora"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: "AURORA no responde" }
+      - alert: AuroraDatabaseDown
+        expr: aurora_database_up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations: { summary: "La base de datos no responde a SELECT 1" }
+      - alert: AuroraErrores5xx
+        expr: |
+          sum(rate(aurora_http_requests_total{status=~"5.."}[5m]))
+          / clamp_min(sum(rate(aurora_http_requests_total[5m])), 0.001) > 0.02
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Más del 2 % de peticiones con error 5xx" }
+      - alert: AuroraLatenciaP95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(aurora_http_request_duration_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "p95 por encima de 1 s durante 10 minutos" }
+      - alert: AuroraDiscoDocumentos
+        expr: aurora_storage_bytes > 20 * 1024 * 1024 * 1024
+        for: 1h
+        labels: { severity: warning }
+        annotations: { summary: "El volumen de documentos supera 20 GiB" }
+```
+
+**Importante:** el registro de métricas es en memoria y por proceso. El contenedor de referencia
+arranca un único worker de uvicorn; si escala horizontalmente, cada réplica expone sus propias
+series y Prometheus debe rasparlas todas (no sume histogramas entre réplicas sin agregar `le`).
+No hay trazas OpenTelemetry todavía.
 
 ### Prueba de humo y carga tras cada despliegue
 

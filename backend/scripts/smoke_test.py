@@ -96,6 +96,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--password", default="Aurora2026!")
     parser.add_argument("--timeout", type=float, default=15.0)
     parser.add_argument("--skip-login", action="store_true", help="Solo comprobar rutas públicas")
+    parser.add_argument("--metrics-token", default=None, help="Token Bearer para /metrics")
     args = parser.parse_args(argv)
 
     print(f"Prueba de humo contra {args.base_url}")
@@ -112,6 +113,16 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  FALLO Inicio de sesión: {exc}")
                 return 1
         report = run_checks(client)
+
+        headers = {"Authorization": f"Bearer {args.metrics_token}"} if args.metrics_token else {}
+        metrics_response = client.get("/metrics", headers=headers)
+        if metrics_response.status_code == 200 and "# TYPE aurora_http_requests_total" in metrics_response.text:
+            report.passed += 1
+            print(f"  OK   {'Métricas Prometheus':<26} {metrics_response.status_code}")
+        else:
+            report.failed += 1
+            report.errors.append(f"Métricas Prometheus: HTTP {metrics_response.status_code}")
+            print(f"  FALLO {'Métricas Prometheus':<25} {metrics_response.status_code}")
 
     print(f"\nResultado: {report.passed} correctas, {report.failed} fallidas")
     for error in report.errors:

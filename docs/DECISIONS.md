@@ -282,3 +282,23 @@ librerías JavaScript pesadas, mantiene el control de permisos y conserva el for
 **Límites.** No hay plantillas configurables por cliente ni envío programado por correo; el PDF es
 una representación tabular, no un documento con logotipo corporativo cargado por el usuario.
 Ambas cosas permanecen en la lista de pendientes de `/sistema`.
+
+---
+
+## D-29 · Métricas Prometheus propias, sin agente ni dependencias
+
+**Decisión.** El backend expone `/metrics` en formato Prometheus 0.0.4 desde el propio proceso:
+contador `aurora_http_requests_total` por método/ruta/estado, histograma de latencias con cubos de
+5 ms a 10 s, gauge de peticiones en vuelo y gauges de base de datos, almacenamiento y operación
+(palés y repartos por estado, tareas abiertas, incidencias, reservas y unidades). La etiqueta de
+ruta usa la plantilla con parámetros (`/api/v1/products/{product_id}`) y agrupa el frontend como
+`frontend` para que la cardinalidad no crezca con los datos. El scrape no se contabiliza.
+
+**Por qué.** Se evita añadir `prometheus_client` o un agente lateral y se mantiene una única fuente
+de verdad: el proceso que atiende las peticiones. Un `METRICS_TOKEN` opcional permite proteger el
+endpoint sin acoplarlo al login de usuarios, que rompería el scrape. Las alertas se documentan como
+reglas de Prometheus listas para copiar, no como una simulación dentro de la aplicación.
+
+**Límites.** El registro es en memoria y por proceso: con varios workers de uvicorn cada uno expone
+sus propias series (documentado; en Docker se usa un worker). No hay trazas OpenTelemetry ni
+alertas gestionadas por AURORA; ambas cosas siguen en `/sistema` como pendientes.

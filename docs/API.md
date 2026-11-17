@@ -372,3 +372,8 @@ La auditoría es append-only: triggers de base de datos rechazan `UPDATE` y `DEL
 | GET | `/system/health` | Comprobación de base de datos y almacenamiento |
 
 `/healthz` (fuera de `/api`) es el endpoint ligero para balanceadores y contenedores.
+
+`GET /metrics` (fuera de `/api`, formato Prometheus 0.0.4) expone contadores y latencias HTTP,
+base de datos, almacenamiento y gauges de operación (palés, repartos, tareas, incidencias,
+reservas y unidades). Si `METRICS_TOKEN` está definido, exige `Authorization: Bearer <token>`;
+en caso contrario debe limitarse el acceso por red. El propio scrape no se contabiliza.

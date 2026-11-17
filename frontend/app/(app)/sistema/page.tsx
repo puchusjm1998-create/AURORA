@@ -144,10 +144,14 @@ export default function SystemPage() {
                 <a href="/healthz" target="_blank" rel="noreferrer" className="btn btn-block btn-ghost">
                   Estado del servicio
                 </a>
+                <a href="/metrics" target="_blank" rel="noreferrer" className="btn btn-block btn-ghost">
+                  Métricas Prometheus
+                </a>
               </div>
               <p className="hint" style={{ marginTop: 10 }}>
                 La documentación de API se genera automáticamente a partir del código y se actualiza con cada
-                despliegue.
+                despliegue. <code>/metrics</code> expone latencias, errores, base de datos y operación en formato
+                Prometheus; puede protegerse con <code>METRICS_TOKEN</code>. Las trazas siguen pendientes.
               </p>
             </Card>
 

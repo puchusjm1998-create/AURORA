@@ -21,6 +21,8 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy.exc import IntegrityError
 
 from app.api.router import api_router
+from app.api.routes import monitoring
+from app.core import metrics as metrics_registry
 from app.core.config import REPO_DIR, get_settings
 from app.core.errors import AppError
 from app.core.timeutils import utcnow
@@ -53,6 +55,26 @@ async def lifespan(app: FastAPI):
     yield
 
 
+def _route_template(request: Request) -> str:
+    """Ruta con parámetros sustituidos por su nombre, para acotar la cardinalidad.
+
+    El ``route.path`` de FastAPI no incluye el prefijo del router, así que se parte
+    de la ruta real y se reemplazan los valores de ``path_params``. El comodín del
+    frontend estático se agrupa como ``frontend`` para no crear una serie por página.
+    """
+    route = request.scope.get("route")
+    declared = getattr(route, "path", None)
+    if not declared:
+        return "unmatched"
+    if "full_path" in declared:
+        return "frontend"
+    path = request.url.path
+    for name, value in (request.scope.get("path_params") or {}).items():
+        if value:
+            path = path.replace(str(value), f"{{{name}}}")
+    return path
+
+
 app = FastAPI(
     title="AURORA LOGISTICS AI",
     version=settings.app_version,
@@ -81,12 +103,23 @@ if settings.cors_origin_list:
 async def request_context(request: Request, call_next) -> Response:
     request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:16]
     started = time.perf_counter()
+    metrics_registry.request_started()
     try:
         response = await call_next(request)
     except Exception:
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        metrics_registry.observe_request(
+            request.method, _route_template(request), 500, elapsed_ms / 1000
+        )
         logger.exception("Error no controlado [%s] %s %s", request_id, request.method, request.url.path)
         raise
+    finally:
+        metrics_registry.request_finished()
     elapsed_ms = (time.perf_counter() - started) * 1000
+    if request.url.path != "/metrics":
+        metrics_registry.observe_request(
+            request.method, _route_template(request), response.status_code, elapsed_ms / 1000
+        )
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
@@ -168,6 +201,7 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
 
 
 app.include_router(api_router)
+app.include_router(monitoring.router)
 
 
 @app.get("/healthz", include_in_schema=False)

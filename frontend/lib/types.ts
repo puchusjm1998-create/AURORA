@@ -341,6 +341,50 @@ export interface Invoice {
   lines: InvoiceLine[];
 }
 
+export type AttendanceEventType = "clock_in" | "clock_out" | "break_start" | "break_end";
+
+export interface AttendanceRecord {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  employee_code: string;
+  event_type: AttendanceEventType;
+  occurred_at: string;
+  recorded_at: string;
+  source: string;
+  device_label: string | null;
+  note: string;
+}
+
+export interface AttendanceMe {
+  employee: EmployeeBrief;
+  date: string;
+  state: "out" | "in" | "break";
+  since: string | null;
+  worked_minutes: number;
+  break_minutes: number;
+  today: AttendanceRecord[];
+  week_minutes: number;
+}
+
+export interface AttendanceSummaryRow {
+  employee_id: string;
+  employee_code: string;
+  employee_name: string;
+  days: number;
+  worked_minutes: number;
+  break_minutes: number;
+  first_in: string | null;
+  last_out: string | null;
+}
+
+export interface AttendanceSummary {
+  date_from: string;
+  date_to: string;
+  total_worked_minutes: number;
+  items: AttendanceSummaryRow[];
+}
+
 export type IncidentType = "damage" | "discrepancy" | "quality" | "safety" | "other";
 export type IncidentStatus = "open" | "acknowledged" | "resolved" | "closed";
 export type IncidentSeverity = "low" | "medium" | "high" | "critical";

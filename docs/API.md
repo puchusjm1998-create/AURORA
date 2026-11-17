@@ -225,6 +225,29 @@ RBAC: niveles 1–3 tienen `incidents.read` y `incidents.write`; el nivel 4 (tra
 `incidents.read` y `incidents.report`, por lo que puede reportar incidencias pero no reconocerlas,
 resolverlas ni cerrarlas. El nivel 5 solo lee.
 
+## Fichaje y jornada
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/attendance/me` | Estado propio, fichajes de hoy, minutos trabajados y semana (`day` opcional) |
+| GET | `/attendance` | Lista paginada (`employee_id`, `event_type`, `date_from`, `date_to`) |
+| GET | `/attendance/summary` | Horas por trabajador (`date_from`, `date_to`, máx. 93 días) |
+| POST | `/attendance` | Registrar fichaje (201) |
+
+Eventos: `clock_in`, `clock_out`, `break_start`, `break_end`. Estados derivados por el servidor:
+`out` (fuera de turno), `in` (trabajando) y `break` (en pausa). Secuencias inválidas (fichar salida
+sin entrada, dos entradas seguidas, pausa ya iniciada…) devuelven 409
+`invalid_attendance_sequence`, y también se valida la compatibilidad con fichajes posteriores
+cuando un responsable inserta un registro antiguo.
+
+El registro es append-only: no hay edición ni borrado; una corrección es un fichaje nuevo. Cada
+alta se audita (`attendance.recorded`) con el usuario que la realizó. Las horas se calculan en
+`Europe/Madrid` con los tramos de trabajo y pausa reales.
+
+RBAC: `attendance.read` (niveles 1–3 y auditor), `attendance.manage` (niveles 1–2) y
+`attendance.clock` (niveles 1–4). El nivel 4 solo puede fichar su propia ficha; si intenta fichar
+por otra persona recibe 403. El auditor no ficha.
+
 ## Facturas y conciliación
 
 | Método | Ruta | Descripción |

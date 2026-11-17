@@ -1,10 +1,11 @@
 # AURORA LOGISTICS AI
 
 Plataforma de gestión logística para almacenes de 10–50 trabajadores. Esta entrega cubre la
-**Fase 1, la primera entrega funcional completa y las Fases 2 y 3**: recepción → almacenamiento →
-localización → expedición, con inventario real, trazabilidad QR, palés, movimientos auditados,
-reservas de stock, tareas de almacén asignadas, incidencias con resolución trazable, facturas de
-proveedor, personal, informes y panel de control.
+**Fase 1, la primera entrega funcional completa, las Fases 2 y 3 y el fichaje de jornada**:
+recepción → almacenamiento → localización → expedición, con inventario real, trazabilidad QR,
+palés, movimientos auditados, reservas de stock, tareas de almacén asignadas, incidencias con
+resolución trazable, fichaje con pausas y horas, facturas de proveedor, personal, informes y panel
+de control.
 
 El sistema no es una maqueta: la interfaz habla con una API FastAPI que persiste en base de datos,
 valida permisos en el servidor y registra cada operación en un libro de auditoría inmutable.
@@ -40,7 +41,7 @@ valida permisos en el servidor y registra cada operación en un libro de auditor
 Además: facturas con documento original inmutable, conciliación, personal y cuentas con RBAC de
 5 niveles, auditoría append-only, informes CSV y página de transparencia `/sistema`.
 
-### Fases 2 y 3 entregadas
+### Fases 2 y 3 + fichaje entregados
 
 | Funcionalidad | Estado | Dónde |
 |---|---|---|
@@ -48,6 +49,8 @@ Además: facturas con documento original inmutable, conciliación, personal y cu
 | Tareas de almacén con responsable, prioridad y vencimiento | ✅ | `/tareas` (crear, iniciar, completar, cancelar, reabrir) |
 | Incidencias con tipo, severidad, responsable y resolución | ✅ | `/incidencias` (reportar, reconocer, resolver, cerrar, reabrir) |
 | Permisos específicos de tareas, reservas e incidencias | ✅ | Semilla RBAC: nivel 4 solo ejecuta sus tareas y puede reportar incidencias |
+| Fichaje de jornada con entrada, salida, pausas y resumen de horas | ✅ | `/fichaje` (personal y visión del equipo) |
+| Registro manual de fichajes con auditoría | ✅ | `/fichaje` (nivel ≥ 2 con `attendance.manage`) |
 | Indicadores operativos en el panel | ✅ | `/` (tareas, reservas, incidencias y disponible real) |
 
 ### Lo que todavía no está implementado (y no se muestra como si lo estuviera)
@@ -63,7 +66,8 @@ las identifica explícitamente:
   estructura y SHA-256; el adaptador S3 queda pendiente.
 - **Redis/Celery** (Fase 4+): trabajos asíncronos (informes programados, notificaciones). Las
   tareas de almacén de la Fase 2 ya son reales, pero se ejecutan de forma síncrona.
-- **Telefonía SIP/API** (Fase 8) y **repartos/fichaje** (Fase 7).
+- **Telefonía SIP/API** y **repartos** (Fase 8); **tarjetas NFC, turnos planificados y bolsa de
+  horas** (Fase 7). El fichaje básico ya es real y auditable.
 - **Informes PDF/Excel nativos** (Fase 9); los CSV actuales son reales y completos.
 
 ---
@@ -141,7 +145,7 @@ backend/
     db/            bootstrap, triggers de inmutabilidad
   alembic/         migraciones versionadas
   scripts/         seed_demo.py (dataset de demostración aislado)
-  tests/           39 pruebas automatizadas
+  tests/           41 pruebas automatizadas
 frontend/
   app/             rutas App Router (login y área autenticada)
   components/      design system, shell, selectores, escáner QR
@@ -223,9 +227,9 @@ cd backend
 ../.venv/bin/python -m pytest tests -q
 ```
 
-Resultado actual: **39 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
+Resultado actual: **41 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
 etiquetas, escaneo, facturas, mapa del almacén, reservas —incluida su caducidad—, tareas de
-almacén, incidencias, informes y auditoría). Las pruebas usan una base de datos SQLite temporal por ejecución;
+almacén, incidencias, fichaje —secuencias y resumen de horas—, informes y auditoría). Las pruebas usan una base de datos SQLite temporal por ejecución;
 nunca tocan datos reales.
 
 Verificación manual del flujo completo con la API en marcha:
@@ -241,7 +245,10 @@ Verificación manual del flujo completo con la API en marcha:
    `operario@aurora.demo` y comprobar que solo ve y ejecuta las tareas asignadas a él.
 8. `/incidencias` → reportar una incidencia (también como operario), reconocerla, resolverla con
    una explicación y cerrarla; comprobar que el stock no cambia y que la resolución queda auditada.
-9. `/operaciones` → expedición; `/movimientos` → ver el libro y confirmar el stock restante.
+9. `/fichaje` → fichar entrada como `operario@aurora.demo`, iniciar y cerrar una pausa y fichar
+   salida; comprobar el estado y las horas. Como encargado, registrar un fichaje manual y ver el
+   resumen del equipo.
+10. `/operaciones` → expedición; `/movimientos` → ver el libro y confirmar el stock restante.
 
 ---
 

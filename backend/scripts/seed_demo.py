@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
@@ -28,6 +28,7 @@ from sqlalchemy import select  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 from app.core.db import SessionLocal, engine  # noqa: E402
 from app.core.enums import (  # noqa: E402
+    AttendanceEventType,
     IncidentSeverity,
     IncidentStatus,
     IncidentType,
@@ -38,8 +39,10 @@ from app.core.enums import (  # noqa: E402
 )
 from app.core.permissions import seed_rbac  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
+from app.core.timeutils import MADRID  # noqa: E402
 from app.db.triggers import install_immutability_triggers  # noqa: E402
 from app.models import (  # noqa: E402
+    AttendanceRecord,
     Employee,
     Incident,
     Invoice,
@@ -621,6 +624,39 @@ def build(args: argparse.Namespace) -> None:
             )
         db.commit()
 
+        # -- Attendance ----------------------------------------------------
+        def punch(email: str, event: AttendanceEventType, moment: datetime) -> None:
+            db.add(
+                AttendanceRecord(
+                    employee_id=employees[email].id,
+                    event_type=event,
+                    occurred_at=moment.astimezone(timezone.utc),
+                    source="web",
+                    note="",
+                    created_by=employees[email].user_id,
+                )
+            )
+
+        now_naive = datetime.now(MADRID).replace(tzinfo=MADRID)
+        today_local = now_naive.date()
+        yesterday_local = today_local - timedelta(days=1)
+        for email in ("pablo@aurora.demo", "operario@aurora.demo", "diego@aurora.demo", "encargado@aurora.demo"):
+            base = datetime.combine(yesterday_local, time(6), tzinfo=MADRID)
+            punch(email, AttendanceEventType.CLOCK_IN, base)
+            punch(email, AttendanceEventType.BREAK_START, base + timedelta(hours=4))
+            punch(email, AttendanceEventType.BREAK_END, base + timedelta(hours=4, minutes=20))
+            punch(email, AttendanceEventType.CLOCK_OUT, base + timedelta(hours=8))
+
+        punch("pablo@aurora.demo", AttendanceEventType.CLOCK_IN, now_naive - timedelta(hours=4))
+        punch("operario@aurora.demo", AttendanceEventType.CLOCK_IN, now_naive - timedelta(hours=5))
+        punch("operario@aurora.demo", AttendanceEventType.BREAK_START, now_naive - timedelta(minutes=20))
+        punch("diego@aurora.demo", AttendanceEventType.CLOCK_IN, now_naive - timedelta(hours=6))
+        punch("diego@aurora.demo", AttendanceEventType.BREAK_START, now_naive - timedelta(hours=2))
+        punch("diego@aurora.demo", AttendanceEventType.BREAK_END, now_naive - timedelta(hours=2) + timedelta(minutes=15))
+        punch("diego@aurora.demo", AttendanceEventType.CLOCK_OUT, now_naive - timedelta(hours=1))
+        punch("encargado@aurora.demo", AttendanceEventType.CLOCK_IN, now_naive - timedelta(hours=3))
+        db.commit()
+
         # -- Invoice reconciliation --------------------------------------
         # Invoice A fully received -> reconciled.
         for line in invoice_a.lines:
@@ -654,7 +690,7 @@ def build(args: argparse.Namespace) -> None:
         print(f"Almacén: {warehouse.code} · {warehouse.name}")
         print(
             f"Ubicaciones: {len(locations)} · Productos: {len(products)} · Palés: 4"
-            f" · Tareas: {len(task_specs)} · Incidencias: {len(incident_specs)}"
+            f" · Tareas: {len(task_specs)} · Incidencias: {len(incident_specs)} · Fichajes: 24"
         )
         print("Cuentas (contraseña única de demo):", DEMO_PASSWORD)
         for label, email in [

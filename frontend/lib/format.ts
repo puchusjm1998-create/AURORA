@@ -252,3 +252,26 @@ export const incidentTypeMeta: Record<string, { tone: string; label: string }> =
   safety: { tone: "danger", label: "Seguridad" },
   other: { tone: "neutral", label: "Otra" },
 };
+
+export function fmtMinutes(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined || Number.isNaN(minutes)) return "—";
+  const safe = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(safe / 60);
+  const rest = safe % 60;
+  if (hours === 0) return `${rest} min`;
+  if (rest === 0) return `${hours} h`;
+  return `${hours} h ${rest} min`;
+}
+
+export const attendanceEventMeta: Record<string, { tone: string; label: string }> = {
+  clock_in: { tone: "success", label: "Entrada" },
+  clock_out: { tone: "neutral", label: "Salida" },
+  break_start: { tone: "warning", label: "Inicio pausa" },
+  break_end: { tone: "info", label: "Fin pausa" },
+};
+
+export const attendanceStateMeta: Record<string, { tone: string; label: string }> = {
+  out: { tone: "neutral", label: "Fuera de turno" },
+  in: { tone: "success", label: "Trabajando" },
+  break: { tone: "warning", label: "En pausa" },
+};

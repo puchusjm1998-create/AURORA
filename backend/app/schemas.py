@@ -13,6 +13,7 @@ from typing import Annotated, Any, Generic, Literal, Optional, TypeVar
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator
 
 from app.core.enums import (
+    AttendanceEventType,
     DeliveryStatus,
     EmployeeStatus,
     IncidentSeverity,
@@ -560,6 +561,55 @@ class TaskRead(ORMBase):
     due_at: Optional[UtcDateTime] = None
     completed_at: Optional[UtcDateTime] = None
     created_at: UtcDateTime
+
+
+class AttendanceCreate(BaseModel):
+    employee_id: Optional[str] = None
+    event_type: AttendanceEventType
+    occurred_at: Optional[datetime] = None
+    note: str = ""
+    device_label: Optional[str] = None
+
+
+class AttendanceRead(ORMBase):
+    employee_id: str
+    employee_name: str
+    employee_code: str
+    event_type: AttendanceEventType
+    occurred_at: UtcDateTime
+    recorded_at: UtcDateTime
+    source: str
+    device_label: Optional[str] = None
+    note: str = ""
+
+
+class AttendanceMe(BaseModel):
+    employee: EmployeeBrief
+    date: date
+    state: Literal["out", "in", "break"]
+    since: Optional[UtcDateTime] = None
+    worked_minutes: int
+    break_minutes: int
+    today: list[AttendanceRead]
+    week_minutes: int
+
+
+class AttendanceSummaryRow(BaseModel):
+    employee_id: str
+    employee_code: str
+    employee_name: str
+    days: int
+    worked_minutes: int
+    break_minutes: int
+    first_in: Optional[UtcDateTime] = None
+    last_out: Optional[UtcDateTime] = None
+
+
+class AttendanceSummary(BaseModel):
+    date_from: date
+    date_to: date
+    total_worked_minutes: int
+    items: list[AttendanceSummaryRow]
 
 
 class IncidentCreate(BaseModel):

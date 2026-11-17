@@ -210,3 +210,13 @@ explicación de las cantidades. El nivel 4 puede reportar incidencias (quien est
 quien primero ve el problema) pero no resolverlas; la resolución exige un texto mínimo y queda
 auditada con el actor real. Cerrar una incidencia es un paso separado de resolverla, para que el
 responsable pueda verificar la corrección antes del cierre definitivo.
+
+## D-24. Fichajes append-only y estado calculado en el servidor
+
+Los fichajes no se editan ni se borran: una corrección es un fichaje nuevo y auditado. El estado
+de la jornada (`out`, `in`, `break`) y las horas trabajadas se derivan de la secuencia completa de
+registros, nunca de un campo «estado actual» que pueda desincronizarse. Las reglas de secuencia se
+validan en el servidor, incluida la compatibilidad con registros posteriores cuando un responsable
+inserta un fichaje antiguo. El nivel 4 puede fichar únicamente su propia ficha; los responsables
+pueden registrar fichajes ajenos (por ejemplo, una tarjeta olvidada) y queda constancia de quién lo
+hizo. La planificación de turnos y las tarjetas NFC siguen pendientes y no se simulan.

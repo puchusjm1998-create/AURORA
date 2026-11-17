@@ -37,6 +37,7 @@ class PermissionCode(StrEnum):
     WORKERS_WRITE = "workers.write"
     ATTENDANCE_READ = "attendance.read"
     ATTENDANCE_MANAGE = "attendance.manage"
+    ATTENDANCE_CLOCK = "attendance.clock"
     # Transport & incidents
     DELIVERIES_READ = "deliveries.read"
     DELIVERIES_WRITE = "deliveries.write"

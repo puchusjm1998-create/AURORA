@@ -768,3 +768,73 @@ export interface AlertEvaluationResult {
   skipped: number;
   alerts: Alert[];
 }
+
+/* ------------------------------------------------------------------ */
+/* OCR de facturas                                                     */
+/* ------------------------------------------------------------------ */
+export interface OcrLineSuggestion {
+  description: string;
+  quantity: string;
+  unit_price: string;
+  tax_rate: string;
+  line_total: string | null;
+}
+
+export interface InvoiceOcrPreview {
+  status: string;
+  engine: string;
+  method: string;
+  provider: string;
+  confidence: number;
+  page_count: number;
+  raw_text: string;
+  supplier_name: string | null;
+  supplier_tax_id: string | null;
+  matched_supplier_id: string | null;
+  matched_supplier_name: string | null;
+  invoice_number: string | null;
+  invoice_date: string | null;
+  due_date: string | null;
+  currency: string;
+  subtotal: string | null;
+  tax_total: string | null;
+  total: string | null;
+  tax_rate: string;
+  lines: OcrLineSuggestion[];
+  warnings: string[];
+  human_review_required: boolean;
+}
+
+export interface InvoiceExtraction extends InvoiceOcrPreview {
+  id: string;
+  invoice_id: string | null;
+  filename: string;
+  created_by: string | null;
+  creator_name: string | null;
+  created_at: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* AURORA Voice                                                        */
+/* ------------------------------------------------------------------ */
+export interface VoiceReply {
+  intent: string;
+  confidence: number;
+  answer: string;
+  provider: string;
+  data: Record<string, unknown>;
+  suggestions: string[];
+}
+
+export interface VoiceStatus {
+  provider: string;
+  provider_label: string;
+  available: boolean;
+  interchangeable: boolean;
+  stt: string;
+  tts: string;
+  audio_leaves_device: boolean;
+  llm_configured: boolean;
+  locale: string;
+  capabilities: string[];
+}

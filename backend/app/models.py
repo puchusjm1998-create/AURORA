@@ -586,6 +586,38 @@ class Invoice(Base, TimestampMixin):
     __table_args__ = (UniqueConstraint("supplier_id", "number", name="uq_invoice_supplier_number"),)
 
 
+class InvoiceExtraction(Base, TimestampMixin):
+    """Resultado de una extracción OCR/PDF, conservado para revisión y auditoría."""
+
+    __tablename__ = "invoice_extractions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    invoice_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("invoices.id", ondelete="CASCADE"), index=True
+    )
+    filename: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), default="", nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    engine: Mapped[str] = mapped_column(String(80), default="", nullable=False)
+    method: Mapped[str] = mapped_column(String(32), default="", nullable=False)
+    status: Mapped[OCRStatus] = mapped_column(
+        enum_column(OCRStatus, "ocr_extraction_status"), default=OCRStatus.DONE, nullable=False
+    )
+    confidence: Mapped[Decimal] = mapped_column(
+        Numeric(5, 4), default=Decimal("0"), nullable=False
+    )
+    page_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    raw_text: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    parsed: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    warnings: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    created_by: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+
+    invoice: Mapped[Optional["Invoice"]] = relationship(lazy="joined")
+    creator: Mapped[Optional["User"]] = relationship(foreign_keys=[created_by], lazy="joined")
+
+
 class InvoiceLine(Base, TimestampMixin):
     __tablename__ = "invoice_lines"
 

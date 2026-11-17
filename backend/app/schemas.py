@@ -905,6 +905,48 @@ class InvoiceRead(ORMBase):
     lines: list[InvoiceLineRead] = []
 
 
+class OcrLineSuggestion(BaseModel):
+    description: str
+    quantity: Decimal
+    unit_price: Decimal
+    tax_rate: Decimal = Decimal("21")
+    line_total: Optional[Decimal] = None
+
+
+class InvoiceOcrPreview(BaseModel):
+    status: str
+    engine: str
+    method: str
+    provider: str = "local"
+    confidence: float
+    page_count: int = 0
+    raw_text: str = ""
+    supplier_name: Optional[str] = None
+    supplier_tax_id: Optional[str] = None
+    matched_supplier_id: Optional[str] = None
+    matched_supplier_name: Optional[str] = None
+    invoice_number: Optional[str] = None
+    invoice_date: Optional[date] = None
+    due_date: Optional[date] = None
+    currency: str = "EUR"
+    subtotal: Optional[Decimal] = None
+    tax_total: Optional[Decimal] = None
+    total: Optional[Decimal] = None
+    tax_rate: Decimal = Decimal("21")
+    lines: list[OcrLineSuggestion] = []
+    warnings: list[str] = []
+    human_review_required: bool = True
+
+
+class InvoiceExtractionRead(InvoiceOcrPreview):
+    id: str
+    invoice_id: Optional[str] = None
+    filename: str = ""
+    created_by: Optional[str] = None
+    creator_name: Optional[str] = None
+    created_at: UtcDateTime
+
+
 class InvoiceUpdate(BaseModel):
     number: Optional[str] = None
     supplier_id: Optional[str] = None
@@ -1200,3 +1242,17 @@ class AlertEvaluationResult(BaseModel):
     triggered: int
     skipped: int
     alerts: list[AlertRead]
+
+
+class VoiceQuery(BaseModel):
+    text: str = Field(min_length=2, max_length=500)
+    locale: str = Field(default="es-ES", max_length=16)
+
+
+class VoiceResponse(BaseModel):
+    intent: str
+    confidence: float
+    answer: str
+    provider: str
+    data: dict[str, Any] = {}
+    suggestions: list[str] = []

@@ -7,7 +7,7 @@ import { api, downloadFile, errorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useApi } from "@/lib/useApi";
 import { fmtDate, fmtDateTime, fmtMoney, fmtNumber, invoiceStatusMeta } from "@/lib/format";
-import type { Invoice, Product } from "@/lib/types";
+import type { Invoice, InvoiceExtraction, Product } from "@/lib/types";
 import { LocationPicker, ProductPicker } from "@/components/pickers";
 import {
   Badge,
@@ -28,6 +28,7 @@ import {
   IconInvoice,
   IconPlus,
   IconRefresh,
+  IconScan,
   IconTrash,
 } from "@/components/icons";
 
@@ -54,8 +55,52 @@ function InvoiceDetail() {
   const [receiveLocation, setReceiveLocation] = useState<{ id: string; code: string } | null>(null);
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [deleteLine, setDeleteLine] = useState<Invoice["lines"][number] | null>(null);
+  const [extraction, setExtraction] = useState<InvoiceExtraction | null>(null);
+  const [extracting, setExtracting] = useState(false);
 
   const data = invoice.data;
+
+  async function runOcr() {
+    if (!data) return;
+    setExtracting(true);
+    try {
+      const result = await api<InvoiceExtraction>(`/api/v1/invoices/${data.id}/extract`, {
+        method: "POST",
+      });
+      setExtraction(result);
+      toast.success(
+        "Documento analizado",
+        `${result.lines.length} línea(s) propuestas con ${Math.round(result.confidence * 100)}% de confianza.`,
+      );
+    } catch (err) {
+      toast.error("No se pudo extraer", errorMessage(err));
+    } finally {
+      setExtracting(false);
+    }
+  }
+
+  async function applyExtraction() {
+    if (!data || !extraction || extraction.lines.length === 0) return;
+    setBusy(true);
+    try {
+      await api<Invoice>(`/api/v1/invoices/${data.id}/lines/bulk`, {
+        method: "POST",
+        body: extraction.lines.map((line) => ({
+          description: line.description,
+          quantity: line.quantity,
+          unit_price: line.unit_price,
+          tax_rate: line.tax_rate,
+        })),
+      });
+      toast.success("Líneas añadidas", "Quedan marcadas para revisión y conciliación.");
+      setExtraction(null);
+      invoice.reload();
+    } catch (err) {
+      toast.error("No se pudieron añadir", errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function addLine(event: React.FormEvent) {
     event.preventDefault();
@@ -179,6 +224,11 @@ function InvoiceDetail() {
             <Link href="/facturas" className="btn btn-ghost">
               <IconInvoice /> Facturas
             </Link>
+            {data.file_path && can("invoices.write") ? (
+              <button type="button" className="btn btn-ghost" onClick={runOcr} disabled={extracting}>
+                {extracting ? <span className="spinner" /> : <IconScan />} Extraer datos
+              </button>
+            ) : null}
             {data.file_path ? (
               <button
                 type="button"
@@ -210,7 +260,9 @@ function InvoiceDetail() {
               <div className="row" style={{ gap: 8, marginBottom: 6 }}>
                 <span className="sku">{data.number}</span>
                 <Badge tone={meta.tone as "success"}>{meta.label}</Badge>
-                <Badge tone="warning" dot={false}>OCR: {data.ocr_status}</Badge>
+                <Badge tone={data.ocr_status === "done" ? "success" : "warning"} dot={false}>
+                  OCR: {data.ocr_status}
+                </Badge>
               </div>
               <h1>{data.supplier_name ?? "Factura sin proveedor"}</h1>
               <div className="detail-meta" style={{ marginTop: 8 }}>
@@ -254,7 +306,7 @@ function InvoiceDetail() {
             <EmptyState
               icon={<IconInvoice />}
               title="Sin líneas"
-              description="Añade las líneas manualmente o configura el proveedor OCR en la Fase 4."
+              description="Use «Extraer datos» para que el OCR local proponga líneas, o añádalas manualmente."
               action={
                 can("invoices.write") ? (
                   <button type="button" className="btn btn-sm btn-primary" onClick={() => setLineOpen(true)}>
@@ -568,6 +620,79 @@ function InvoiceDetail() {
         onConfirm={reconcile}
         onClose={() => setReconcileOpen(false)}
       />
+
+      <Modal
+        open={extraction !== null}
+        title="Datos extraídos del documento"
+        subtitle={extraction ? `${extraction.engine} · ${extraction.method} · ${extraction.page_count} página(s)` : undefined}
+        onClose={() => setExtraction(null)}
+        wide
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={() => setExtraction(null)}>
+              Cerrar
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={applyExtraction}
+              disabled={busy || !extraction?.lines.length}
+            >
+              {busy ? <span className="spinner" /> : <IconPlus />} Añadir {extraction?.lines.length ?? 0} líneas
+            </button>
+          </>
+        }
+      >
+        {extraction ? (
+          <div className="stack" style={{ gap: 12 }}>
+            <div className="row" style={{ gap: 8 }}>
+              <Badge tone={extraction.status === "done" ? "success" : "danger"}>
+                {Math.round(extraction.confidence * 100)}% confianza
+              </Badge>
+              {extraction.matched_supplier_name ? (
+                <span className="small text-success">Proveedor: {extraction.matched_supplier_name}</span>
+              ) : null}
+            </div>
+            <div className="small text-muted">
+              {extraction.supplier_name ?? "Proveedor no identificado"}
+              {extraction.supplier_tax_id ? ` · ${extraction.supplier_tax_id}` : ""}
+              {extraction.invoice_number ? ` · Nº ${extraction.invoice_number}` : ""}
+              {extraction.total ? ` · Total ${fmtMoney(extraction.total)}` : ""}
+            </div>
+            {extraction.warnings.length ? (
+              <div className="alert warning">
+                <strong>Requiere revisión</strong>
+                <span>{extraction.warnings.join(" ")}</span>
+              </div>
+            ) : null}
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Descripción</th>
+                    <th className="num">Cantidad</th>
+                    <th className="num">Precio</th>
+                    <th className="num">IVA %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {extraction.lines.map((line, index) => (
+                    <tr key={index}>
+                      <td>{line.description}</td>
+                      <td className="num">{fmtNumber(line.quantity, 0)}</td>
+                      <td className="num">{fmtMoney(line.unit_price)}</td>
+                      <td className="num">{Number(line.tax_rate)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {extraction.lines.length === 0 ? (
+              <p className="small text-muted">No se han identificado líneas; revíselas manualmente.</p>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
 
       <ConfirmDialog
         open={Boolean(deleteLine)}

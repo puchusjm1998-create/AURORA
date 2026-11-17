@@ -20,6 +20,11 @@ python-dateutil==4.0.0
 # Producción: PostgreSQL. El README explica cómo activarlo con DATABASE_URL.
 psycopg[binary]>=3.2,<4
 
+# OCR local de facturas (sin servicios externos)
+rapidocr-onnxruntime==1.4.4
+opencv-python-headless==5.1.0.95
+pymupdf==2.1.0
+
 # Pruebas
 pytest==9.2.0
 pytest-cov==7.1.0

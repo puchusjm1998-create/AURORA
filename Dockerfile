@@ -20,7 +20,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TZ=Europe/Madrid
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/* \
     && addgroup --system aurora \
     && adduser --system --ingroup aurora --home /app aurora
@@ -28,7 +28,10 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY backend/requirements.txt backend/requirements.txt
-RUN pip install --no-cache-dir -r backend/requirements.txt
+# RapidOCR declara opencv-python; se sustituye por la variante headless (sin X11/GL).
+RUN pip install --no-cache-dir -r backend/requirements.txt \
+    && (pip uninstall -y opencv-python || true) \
+    && pip install --no-cache-dir opencv-python-headless==5.1.0.95
 
 COPY backend backend
 COPY --from=frontend /build/frontend/out frontend/out

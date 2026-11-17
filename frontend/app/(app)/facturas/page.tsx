@@ -7,7 +7,7 @@ import { api, errorMessage, withQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useDebounced, useApi } from "@/lib/useApi";
 import { fmtDate, fmtMoney, invoiceStatusMeta } from "@/lib/format";
-import type { Invoice, Page, Supplier } from "@/lib/types";
+import type { Invoice, InvoiceOcrPreview, OcrLineSuggestion, Page, Supplier } from "@/lib/types";
 import {
   Badge,
   EmptyState,
@@ -20,7 +20,7 @@ import {
   SearchInput,
   useToast,
 } from "@/components/ui";
-import { IconInvoice, IconPlus, IconRefresh } from "@/components/icons";
+import { IconInvoice, IconPlus, IconRefresh, IconScan } from "@/components/icons";
 
 const LIMIT = 25;
 
@@ -41,6 +41,9 @@ export default function InvoicesPage() {
     notes: "",
   });
   const [file, setFile] = useState<File | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [extraction, setExtraction] = useState<InvoiceOcrPreview | null>(null);
+  const [ocrLines, setOcrLines] = useState<OcrLineSuggestion[]>([]);
   const debounced = useDebounced(search, 280);
   const suppliers = useApi<Page<Supplier>>("/api/v1/suppliers");
 
@@ -56,6 +59,48 @@ export default function InvoicesPage() {
   );
   const invoices = useApi<Page<Invoice>>(query);
 
+  async function extract() {
+    if (!file) {
+      toast.error("Seleccione un documento", "PDF, JPG, PNG, WEBP o TIFF.");
+      return;
+    }
+    setExtracting(true);
+    setError(null);
+    try {
+      const body = new FormData();
+      body.set("file", file);
+      const result = await api<InvoiceOcrPreview>("/api/v1/invoices/ocr/preview", {
+        method: "POST",
+        body,
+      });
+      setExtraction(result);
+      setOcrLines(result.lines);
+      if (result.invoice_number) setForm((current) => ({ ...current, number: result.invoice_number ?? current.number }));
+      if (result.invoice_date) setForm((current) => ({ ...current, invoice_date: result.invoice_date ?? current.invoice_date }));
+      if (result.matched_supplier_id) {
+        setForm((current) => ({ ...current, supplier_id: result.matched_supplier_id ?? current.supplier_id }));
+      }
+      if (result.status === "done") {
+        toast.success(
+          "Documento analizado",
+          `${result.lines.length} línea(s) propuestas. Revíselas antes de guardar.`,
+        );
+      } else {
+        toast.error("No se pudo leer el documento", result.warnings.join(" "));
+      }
+    } catch (err) {
+      toast.error("No se pudo analizar", errorMessage(err));
+    } finally {
+      setExtracting(false);
+    }
+  }
+
+  function updateOcrLine(index: number, patch: Partial<OcrLineSuggestion>) {
+    setOcrLines((current) =>
+      current.map((line, position) => (position === index ? { ...line, ...patch } : line)),
+    );
+  }
+
   async function upload(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
@@ -67,11 +112,27 @@ export default function InvoicesPage() {
       if (form.supplier_id) data.set("supplier_id", form.supplier_id);
       data.set("notes", form.notes);
       if (file) data.set("file", file);
+      if (extraction && ocrLines.length) {
+        data.set(
+          "lines_json",
+          JSON.stringify(
+            ocrLines.map((line) => ({
+              description: line.description,
+              quantity: line.quantity,
+              unit_price: line.unit_price,
+              tax_rate: line.tax_rate,
+            })),
+          ),
+        );
+        data.set("ocr_reviewed", "true");
+      }
       const invoice = await api<Invoice>("/api/v1/invoices", { method: "POST", body: data });
       toast.success("Factura registrada", `${invoice.number} · original conservado sin modificar.`);
       setOpen(false);
       setForm({ number: "", invoice_date: new Date().toISOString().slice(0, 10), supplier_id: "", notes: "" });
       setFile(null);
+      setExtraction(null);
+      setOcrLines([]);
       invoices.reload();
       router.push(`/factura?id=${invoice.id}`);
     } catch (err) {
@@ -101,11 +162,11 @@ export default function InvoicesPage() {
         }
       />
 
-      <div className="alert warning" style={{ marginBottom: 16 }}>
-        <strong>OCR automático pendiente de proveedor</strong>
+      <div className="alert success" style={{ marginBottom: 16 }}>
+        <strong>OCR local con revisión humana</strong>
         <span>
-          La extracción automática de líneas (Fase 4) requiere configurar un proveedor OCR externo. Mientras no
-          esté conectado, AURORA no inventa datos: las líneas se introducen y revisan por una persona.
+          Suba un PDF o una imagen y AURORA propone proveedor, número, fecha, totales y líneas. Ningún documento
+          sale del servidor y nada se guarda como línea hasta que una persona lo confirma.
         </span>
       </div>
 
@@ -270,8 +331,25 @@ export default function InvoicesPage() {
                 className="input"
                 type="file"
                 accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff"
-                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                onChange={(event) => {
+                  setFile(event.target.files?.[0] ?? null);
+                  setExtraction(null);
+                  setOcrLines([]);
+                }}
               />
+              <div className="row" style={{ marginTop: 8 }}>
+                <button type="button" className="btn btn-sm" onClick={extract} disabled={!file || extracting}>
+                  {extracting ? <span className="spinner" /> : <IconScan />} Extraer datos
+                </button>
+                {extraction ? (
+                  <>
+                    <Badge tone={extraction.status === "done" ? "success" : "danger"}>
+                      {Math.round(extraction.confidence * 100)}% confianza
+                    </Badge>
+                    <span className="small text-muted">{extraction.engine}</span>
+                  </>
+                ) : null}
+              </div>
             </Field>
             <Field label="Observaciones" className="full">
               <textarea
@@ -281,6 +359,78 @@ export default function InvoicesPage() {
               />
             </Field>
           </div>
+          {extraction ? (
+            <div className="stack" style={{ gap: 10 }}>
+              <div className="row" style={{ gap: 8 }}>
+                <strong>Propuesta de extracción</strong>
+                <Badge tone="info" dot={false}>{extraction.method}</Badge>
+                {extraction.matched_supplier_name ? (
+                  <span className="small text-success">
+                    Proveedor reconocido: {extraction.matched_supplier_name}
+                  </span>
+                ) : null}
+              </div>
+              <div className="small text-muted">
+                {extraction.supplier_name ?? "Proveedor no identificado"}
+                {extraction.supplier_tax_id ? ` · ${extraction.supplier_tax_id}` : ""}
+                {extraction.total ? ` · Total leído ${fmtMoney(extraction.total)}` : ""}
+              </div>
+              {extraction.warnings.length ? (
+                <div className="alert warning">
+                  <strong>Revise estos puntos</strong>
+                  <span>{extraction.warnings.join(" ")}</span>
+                </div>
+              ) : null}
+              {ocrLines.length ? (
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Descripción</th>
+                        <th className="num">Cantidad</th>
+                        <th className="num">Precio</th>
+                        <th className="num">IVA %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ocrLines.map((line, index) => (
+                        <tr key={index}>
+                          <td>
+                            <input
+                              className="input"
+                              value={line.description}
+                              onChange={(event) => updateOcrLine(index, { description: event.target.value })}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="input num"
+                              value={line.quantity}
+                              onChange={(event) => updateOcrLine(index, { quantity: event.target.value })}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="input num"
+                              value={line.unit_price}
+                              onChange={(event) => updateOcrLine(index, { unit_price: event.target.value })}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="input num"
+                              value={line.tax_rate}
+                              onChange={(event) => updateOcrLine(index, { tax_rate: event.target.value })}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {error ? <div className="form-error">{error}</div> : null}
         </form>
       </Modal>

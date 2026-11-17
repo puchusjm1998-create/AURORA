@@ -148,14 +148,17 @@ Procedimiento recomendado de actualización:
 3. Verificar `/healthz` y `/api/v1/system/health`.
 4. Revisar los logs (`docker compose logs -f api`).
 
-Esta entrega (reservas y tareas) añade permisos nuevos (`tasks.*`) y relaciones, no tablas: el
-esquema ya existía. Arranque una vez con `AURORA_BOOTSTRAP=true` para que la semilla RBAC cree los
-permisos y los asigne a los cinco roles; después puede volver a `false`. Sin ese paso, las rutas de
-tareas responderán 403 aunque el administrador tenga la sesión abierta. Compruebe con:
+Esta entrega añade las migraciones `8c1f4b2a7d90` (tipo de incidencia y vínculos a producto y
+palé) y permisos nuevos (`tasks.*`, `incidents.report`). Aplique el esquema con
+`AURORA_RUN_MIGRATIONS=true` y arranque una vez con `AURORA_BOOTSTRAP=true` para que la semilla
+RBAC cree los permisos y los asigne a los cinco roles; después puede volver a `false`. Sin ese
+paso, las rutas de tareas e incidencias responderán 403 aunque el administrador tenga la sesión
+abierta. Compruebe con:
 
 ```bash
 docker compose exec api python -c "import app.main"   # importación sana
 curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/tasks | head -c 200
+curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/incidents | head -c 200
 ```
 
 Las migraciones son aditivas por diseño; aun así, pruebe siempre en staging con una copia de la

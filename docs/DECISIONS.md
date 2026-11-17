@@ -200,3 +200,13 @@ como sustituto de una recepción o expedición. El ciclo de vida es explícito (
 `in_progress`, `blocked`, `done`, `cancelled`), cada transición va a auditoría y las tareas
 cerradas no se editan (409). El nivel 4 puede leer y completar, pero el servidor comprueba que la
 tarea esté asignada a su propia ficha de empleado; la UI no es la que impone la restricción.
+
+## D-23. Las incidencias documentan, los movimientos corrigen
+
+Una incidencia (daño, descuadre, calidad o seguridad) es un registro de lo que pasó y de cómo se
+resolvió, con severidad, responsable y transiciones explícitas. No modifica existencias: si hay que
+corregir stock, se usa un movimiento auditado, de modo que el libro siga siendo la única
+explicación de las cantidades. El nivel 4 puede reportar incidencias (quien está en el muelle es
+quien primero ve el problema) pero no resolverlas; la resolución exige un texto mínimo y queda
+auditada con el actor real. Cerrar una incidencia es un paso separado de resolverla, para que el
+responsable pueda verificar la corrección antes del cierre definitivo.

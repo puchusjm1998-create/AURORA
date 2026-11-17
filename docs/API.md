@@ -201,6 +201,30 @@ solo `tasks.read` y `tasks.complete`, y únicamente sobre tareas asignadas a su 
 (si no tiene ficha vinculada o la tarea es de otra persona, la respuesta es 403). El nivel 5
 (auditor) solo lee. `PATCH` sobre una tarea cerrada devuelve 409 `task_closed`.
 
+## Incidencias
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/incidents` | Lista paginada (`status` y `severity` CSV, `incident_type`, `assigned_to`, `search`) |
+| GET | `/incidents/{id}` | Detalle con producto, ubicación, palé, autor y responsable |
+| POST | `/incidents` | Registrar incidencia (201) |
+| PATCH | `/incidents/{id}` | Editar mientras no esté cerrada (409 `incident_closed`) |
+| POST | `/incidents/{id}/acknowledge` | `open` → `acknowledged` |
+| POST | `/incidents/{id}/resolve` | `open`/`acknowledged` → `resolved`; requiere `resolution` |
+| POST | `/incidents/{id}/close` | `resolved` → `closed` |
+| POST | `/incidents/{id}/reopen` | `resolved`/`closed` → `open`; limpia la resolución |
+
+Tipos: `damage`, `discrepancy`, `quality`, `safety`, `other`. Severidades: `low`, `medium`, `high`,
+`critical`. Estados: `open`, `acknowledged`, `resolved`, `closed`; código legible `AUR-INC-*`.
+Las transiciones inválidas devuelven 409 `invalid_transition`. Cada paso se audita
+(`incident.created`, `incident.updated`, `incident.acknowledged`, `incident.resolved`,
+`incident.closed`, `incident.reopened`). Una incidencia **no** ajusta stock: la corrección se hace
+con un movimiento auditado.
+
+RBAC: niveles 1–3 tienen `incidents.read` y `incidents.write`; el nivel 4 (trabajador) tiene
+`incidents.read` y `incidents.report`, por lo que puede reportar incidencias pero no reconocerlas,
+resolverlas ni cerrarlas. El nivel 5 solo lee.
+
 ## Facturas y conciliación
 
 | Método | Ruta | Descripción |
@@ -250,7 +274,7 @@ desactivar la propia cuenta.
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/dashboard` | KPIs (incluye tareas abiertas/vencidas y reservas activas), ocupación, top productos, stock bajo y actividad reciente |
+| GET | `/dashboard` | KPIs (incluye tareas abiertas/vencidas, reservas activas e incidencias abiertas/críticas), ocupación, top productos, stock bajo y actividad reciente |
 | GET | `/audit` | Auditoría filtrable (`action`, `entity_type`, `actor`, fechas) |
 | GET | `/reports/summary` | Valoración por categoría (coste, venta, margen) |
 | GET | `/reports/inventory.csv` | Inventario detallado (UTF-8 con BOM, separador `;`) |

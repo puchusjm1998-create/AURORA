@@ -28,6 +28,9 @@ from sqlalchemy import select  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 from app.core.db import SessionLocal, engine  # noqa: E402
 from app.core.enums import (  # noqa: E402
+    IncidentSeverity,
+    IncidentStatus,
+    IncidentType,
     MovementType,
     PalletStatus,
     TaskStatus,
@@ -38,6 +41,7 @@ from app.core.security import hash_password  # noqa: E402
 from app.db.triggers import install_immutability_triggers  # noqa: E402
 from app.models import (  # noqa: E402
     Employee,
+    Incident,
     Invoice,
     InvoiceLine,
     Location,
@@ -542,6 +546,81 @@ def build(args: argparse.Namespace) -> None:
             )
         db.commit()
 
+        # -- Incidents -----------------------------------------------------
+        incident_specs = [
+            (
+                "Derrame de líquido en el pasillo P01",
+                "Una garrafa ha goteado junto a la estantería. Zona señalizada y absorbente colocado.",
+                IncidentType.SAFETY,
+                IncidentSeverity.CRITICAL,
+                IncidentStatus.OPEN,
+                "pablo@aurora.demo",
+                locations["ALM-01-P01-EA-N01-POS01"].id,
+                None,
+                None,
+                "",
+                None,
+            ),
+            (
+                "Palé con esquina dañada en recepción",
+                "Dos cajas de tornillería presentan golpes; el palé no es estable para almacenar.",
+                IncidentType.DAMAGE,
+                IncidentSeverity.HIGH,
+                IncidentStatus.ACKNOWLEDGED,
+                "operario@aurora.demo",
+                None,
+                products["FIS-8842"].id,
+                pallet_d.id,
+                "",
+                None,
+            ),
+            (
+                "Descuadre de 2 cajas en el recuento de TPK-0500",
+                "El sistema indica 120 cajas y el recuento físico da 118.",
+                IncidentType.DISCREPANCY,
+                IncidentSeverity.MEDIUM,
+                IncidentStatus.RESOLVED,
+                "diego@aurora.demo",
+                None,
+                products["TPK-0500"].id,
+                None,
+                "Se localizaron las dos cajas en el hueco contiguo y se registró un movimiento de corrección.",
+                now - timedelta(days=1),
+            ),
+            (
+                "Etiqueta QR ilegible en una ubicación",
+                "La etiqueta de la posición P03 estaba despegada y no se podía escanear.",
+                IncidentType.QUALITY,
+                IncidentSeverity.LOW,
+                IncidentStatus.CLOSED,
+                None,
+                locations["ALM-01-P03-EA-N01-POS02"].id,
+                None,
+                None,
+                "Se reimprimió la etiqueta y se fijó con funda protectora.",
+                now - timedelta(days=3),
+            ),
+        ]
+        for title, description, kind, severity, status, email, location_id, product_id, pallet_id, resolution, resolved_at in incident_specs:
+            db.add(
+                Incident(
+                    code=next_code(db, "incident"),
+                    title=title,
+                    description=description,
+                    incident_type=kind,
+                    severity=severity,
+                    status=status,
+                    reported_by=supervisor.id,
+                    assigned_to=employees[email].id if email else None,
+                    location_id=location_id,
+                    product_id=product_id,
+                    pallet_id=pallet_id,
+                    resolution=resolution,
+                    resolved_at=resolved_at,
+                )
+            )
+        db.commit()
+
         # -- Invoice reconciliation --------------------------------------
         # Invoice A fully received -> reconciled.
         for line in invoice_a.lines:
@@ -573,7 +652,10 @@ def build(args: argparse.Namespace) -> None:
 
         print("\n=== AURORA · datos de DEMOSTRACIÓN cargados ===")
         print(f"Almacén: {warehouse.code} · {warehouse.name}")
-        print(f"Ubicaciones: {len(locations)} · Productos: {len(products)} · Palés: 4 · Tareas: {len(task_specs)}")
+        print(
+            f"Ubicaciones: {len(locations)} · Productos: {len(products)} · Palés: 4"
+            f" · Tareas: {len(task_specs)} · Incidencias: {len(incident_specs)}"
+        )
         print("Cuentas (contraseña única de demo):", DEMO_PASSWORD)
         for label, email in [
             ("Nivel 1 Administrador", "admin@aurora.demo"),

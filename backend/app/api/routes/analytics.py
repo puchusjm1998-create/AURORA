@@ -14,13 +14,14 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_permission
 from app.core.db import get_db
-from app.core.enums import PermissionCode
+from app.core.enums import IncidentSeverity, IncidentStatus, PermissionCode
 from app.core.errors import ValidationError
 from app.core.timeutils import madrid_day_bounds_utc, utcnow
 from app.services.reservations import expire_due
 from app.models import (
     AuditLog,
     Employee,
+    Incident,
     Invoice,
     Location,
     Pallet,
@@ -179,6 +180,23 @@ def dashboard(
         )
         or 0
     )
+    open_incidents = int(
+        db.scalar(
+            select(func.count(Incident.id)).where(
+                Incident.status.in_([IncidentStatus.OPEN, IncidentStatus.ACKNOWLEDGED])
+            )
+        )
+        or 0
+    )
+    critical_incidents = int(
+        db.scalar(
+            select(func.count(Incident.id)).where(
+                Incident.status.in_([IncidentStatus.OPEN, IncidentStatus.ACKNOWLEDGED]),
+                Incident.severity.in_([IncidentSeverity.HIGH, IncidentSeverity.CRITICAL]),
+            )
+        )
+        or 0
+    )
     reserved_units = Decimal(
         str(
             db.scalar(
@@ -210,6 +228,8 @@ def dashboard(
         overdue_tasks=overdue_tasks,
         active_reservations=active_reservations,
         reserved_units=reserved_units,
+        open_incidents=open_incidents,
+        critical_incidents=critical_incidents,
     )
 
     occupancy_rows = db.execute(

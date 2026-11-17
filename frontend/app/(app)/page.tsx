@@ -81,6 +81,24 @@ export default function DashboardPage() {
         }
       />
 
+      {data && data.kpis.critical_incidents > 0 ? (
+        <div className="alert danger" style={{ marginBottom: 16 }}>
+          <strong>
+            {data.kpis.critical_incidents}{" "}
+            {data.kpis.critical_incidents === 1 ? "incidencia crítica abierta" : "incidencias críticas abiertas"}
+          </strong>
+          <span>
+            Requieren atención del encargado antes de seguir operando.{" "}
+            <Link href="/incidencias" className="text-accent">
+              Revisar incidencias
+            </Link>
+            {data.kpis.open_incidents > data.kpis.critical_incidents
+              ? ` · ${data.kpis.open_incidents} abiertas en total`
+              : ""}
+          </span>
+        </div>
+      ) : null}
+
       {error ? <ErrorBlock message={error} onRetry={reload} /> : null}
       {loading && !data ? <LoadingBlock label="Calculando indicadores…" /> : null}
 
@@ -144,7 +162,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="grid grid-4">
+          <div className="grid grid-5">
             <Stat
               label="Tareas abiertas"
               value={data.kpis.open_tasks}
@@ -167,6 +185,15 @@ export default function DashboardPage() {
               label="Unidades reservadas"
               value={fmtNumber(data.kpis.reserved_units, 0)}
               meta={<span>no disponibles para otras salidas</span>}
+            />
+            <Stat
+              label="Incidencias abiertas"
+              value={data.kpis.open_incidents}
+              meta={
+                <Link href="/incidencias" className="text-accent">
+                  {data.kpis.critical_incidents} de alta severidad
+                </Link>
+              }
             />
             <Stat
               label="Disponible real"

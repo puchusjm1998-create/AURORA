@@ -341,6 +341,35 @@ export interface Invoice {
   lines: InvoiceLine[];
 }
 
+export type IncidentType = "damage" | "discrepancy" | "quality" | "safety" | "other";
+export type IncidentStatus = "open" | "acknowledged" | "resolved" | "closed";
+export type IncidentSeverity = "low" | "medium" | "high" | "critical";
+
+export interface Incident {
+  id: string;
+  code: string;
+  title: string;
+  description: string;
+  incident_type: IncidentType;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  location_id: string | null;
+  location_code: string | null;
+  product_id: string | null;
+  product_sku: string | null;
+  product_name: string | null;
+  pallet_id: string | null;
+  pallet_code: string | null;
+  reported_by_name: string | null;
+  assigned_to: string | null;
+  assignee_name: string | null;
+  assignee_code: string | null;
+  resolution: string;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DashboardKpis {
   products: number;
   active_products: number;
@@ -361,6 +390,8 @@ export interface DashboardKpis {
   overdue_tasks: number;
   active_reservations: number;
   reserved_units: Decimal;
+  open_incidents: number;
+  critical_incidents: number;
 }
 
 export interface DashboardData {

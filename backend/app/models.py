@@ -45,6 +45,7 @@ from app.core.enums import (
     EmployeeStatus,
     IncidentSeverity,
     IncidentStatus,
+    IncidentType,
     InvoiceSource,
     InvoiceStatus,
     MovementStatus,
@@ -705,6 +706,12 @@ class Incident(Base, TimestampMixin):
     code: Mapped[str] = mapped_column(String(24), unique=True, nullable=False)
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    incident_type: Mapped[IncidentType] = mapped_column(
+        enum_column(IncidentType, "incident_type"),
+        default=IncidentType.OTHER,
+        server_default="OTHER",
+        nullable=False,
+    )
     severity: Mapped[IncidentSeverity] = mapped_column(
         enum_column(IncidentSeverity, "incident_severity"),
         default=IncidentSeverity.LOW,
@@ -716,8 +723,20 @@ class Incident(Base, TimestampMixin):
     reported_by: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     assigned_to: Mapped[Optional[str]] = mapped_column(ForeignKey("employees.id"))
     location_id: Mapped[Optional[str]] = mapped_column(ForeignKey("locations.id"))
+    product_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("products.id", ondelete="SET NULL"), index=True
+    )
+    pallet_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("pallets.id", ondelete="SET NULL"), index=True
+    )
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     resolution: Mapped[str] = mapped_column(Text, default="", nullable=False)
+
+    reporter: Mapped[Optional["User"]] = relationship(foreign_keys=[reported_by], lazy="joined")
+    assignee: Mapped[Optional["Employee"]] = relationship(foreign_keys=[assigned_to], lazy="joined")
+    location: Mapped[Optional["Location"]] = relationship(foreign_keys=[location_id], lazy="joined")
+    product: Mapped[Optional["Product"]] = relationship(foreign_keys=[product_id], lazy="joined")
+    pallet: Mapped[Optional["Pallet"]] = relationship(foreign_keys=[pallet_id], lazy="joined")
 
 
 class Notification(Base):

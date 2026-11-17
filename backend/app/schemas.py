@@ -17,6 +17,7 @@ from app.core.enums import (
     EmployeeStatus,
     IncidentSeverity,
     IncidentStatus,
+    IncidentType,
     InvoiceStatus,
     MovementStatus,
     MovementType,
@@ -561,6 +562,56 @@ class TaskRead(ORMBase):
     created_at: UtcDateTime
 
 
+class IncidentCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    description: str = ""
+    incident_type: IncidentType = IncidentType.OTHER
+    severity: IncidentSeverity = IncidentSeverity.LOW
+    location_id: Optional[str] = None
+    product_id: Optional[str] = None
+    pallet_id: Optional[str] = None
+    assigned_to: Optional[str] = None
+
+
+class IncidentUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    description: Optional[str] = None
+    incident_type: Optional[IncidentType] = None
+    severity: Optional[IncidentSeverity] = None
+    location_id: Optional[str] = None
+    product_id: Optional[str] = None
+    pallet_id: Optional[str] = None
+    assigned_to: Optional[str] = None
+
+
+class IncidentResolve(BaseModel):
+    resolution: str = Field(min_length=5, max_length=4000)
+
+
+class IncidentRead(ORMBase):
+    code: str
+    title: str
+    description: str
+    incident_type: IncidentType
+    severity: IncidentSeverity
+    status: IncidentStatus
+    location_id: Optional[str] = None
+    location_code: Optional[str] = None
+    product_id: Optional[str] = None
+    product_sku: Optional[str] = None
+    product_name: Optional[str] = None
+    pallet_id: Optional[str] = None
+    pallet_code: Optional[str] = None
+    reported_by_name: Optional[str] = None
+    assigned_to: Optional[str] = None
+    assignee_name: Optional[str] = None
+    assignee_code: Optional[str] = None
+    resolution: str = ""
+    resolved_at: Optional[UtcDateTime] = None
+    created_at: UtcDateTime
+    updated_at: UtcDateTime
+
+
 class ReservationCreate(BaseModel):
     product_id: str
     location_id: str
@@ -675,6 +726,8 @@ class DashboardKpis(BaseModel):
     overdue_tasks: int
     active_reservations: int
     reserved_units: Decimal
+    open_incidents: int
+    critical_incidents: int
 
 
 class DashboardActivity(BaseModel):

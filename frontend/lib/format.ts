@@ -230,3 +230,25 @@ export function warehouseTimeNow(): string {
     minute: "2-digit",
   }).format(new Date());
 }
+
+export const incidentStatusMeta: Record<string, { tone: string; label: string }> = {
+  open: { tone: "danger", label: "Abierta" },
+  acknowledged: { tone: "warning", label: "Reconocida" },
+  resolved: { tone: "info", label: "Resuelta" },
+  closed: { tone: "success", label: "Cerrada" },
+};
+
+export const incidentSeverityMeta: Record<string, { tone: string; label: string }> = {
+  low: { tone: "neutral", label: "Baja" },
+  medium: { tone: "info", label: "Media" },
+  high: { tone: "warning", label: "Alta" },
+  critical: { tone: "danger", label: "Crítica" },
+};
+
+export const incidentTypeMeta: Record<string, { tone: string; label: string }> = {
+  damage: { tone: "warning", label: "Daño" },
+  discrepancy: { tone: "info", label: "Descuadre" },
+  quality: { tone: "neutral", label: "Calidad" },
+  safety: { tone: "danger", label: "Seguridad" },
+  other: { tone: "neutral", label: "Otra" },
+};

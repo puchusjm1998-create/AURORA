@@ -42,6 +42,7 @@ class PermissionCode(StrEnum):
     DELIVERIES_WRITE = "deliveries.write"
     INCIDENTS_READ = "incidents.read"
     INCIDENTS_WRITE = "incidents.write"
+    INCIDENTS_REPORT = "incidents.report"
     # Reporting & governance
     REPORTS_READ = "reports.read"
     REPORTS_EXPORT = "reports.export"
@@ -173,6 +174,14 @@ class IncidentSeverity(StrEnum):
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
+
+
+class IncidentType(StrEnum):
+    DAMAGE = "damage"
+    DISCREPANCY = "discrepancy"
+    QUALITY = "quality"
+    SAFETY = "safety"
+    OTHER = "other"
 
 
 class IncidentStatus(StrEnum):

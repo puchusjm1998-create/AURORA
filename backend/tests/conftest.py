@@ -25,12 +25,20 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from app.core.db import SessionLocal, engine  # noqa: E402
 from app.core.permissions import seed_rbac  # noqa: E402
-from app.core.security import hash_password  # noqa: E402
+from app.core.security import hash_password, login_limiter  # noqa: E402
 from app.db.triggers import install_immutability_triggers  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Base, Role, User  # noqa: E402
 
 PASSWORD = "TestPass123"
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """The limiter is process-wide; tests must not inherit blocked keys."""
+    login_limiter.reset_all()
+    yield
+    login_limiter.reset_all()
 
 
 @pytest.fixture()

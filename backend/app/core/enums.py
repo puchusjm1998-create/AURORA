@@ -28,6 +28,10 @@ class PermissionCode(StrEnum):
     INVOICES_READ = "invoices.read"
     INVOICES_WRITE = "invoices.write"
     INVOICES_RECONCILE = "invoices.reconcile"
+    # Tasks
+    TASKS_READ = "tasks.read"
+    TASKS_WRITE = "tasks.write"
+    TASKS_COMPLETE = "tasks.complete"
     # People
     WORKERS_READ = "workers.read"
     WORKERS_WRITE = "workers.write"

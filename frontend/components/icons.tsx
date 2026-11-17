@@ -251,6 +251,22 @@ export const IconKey = (p: IconProps) => (
   </svg>
 );
 
+export const IconTask = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="5" y="4" width="14" height="17" rx="2" />
+    <path d="M9 4.5V3h6v1.5" />
+    <path d="M8.5 10h7" />
+    <path d="M8.5 13.5h7" />
+    <path d="M8.5 17h4" />
+  </svg>
+);
+
+export const IconReserve = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1Z" />
+  </svg>
+);
+
 export const IconActivity = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M3 12h4l2.5-7 4 14 2.5-7h5" />

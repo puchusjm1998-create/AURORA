@@ -283,6 +283,24 @@ export interface Reservation {
   expires_at: string | null;
 }
 
+export type TaskStatus = "pending" | "in_progress" | "blocked" | "done" | "cancelled";
+
+export interface Task {
+  id: string;
+  code: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  priority: number;
+  assigned_to: string | null;
+  assignee_name: string | null;
+  assignee_code: string | null;
+  created_by_name: string;
+  due_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
 export interface InvoiceLine {
   id: string;
   line_number: number;
@@ -339,6 +357,10 @@ export interface DashboardKpis {
   low_stock_products: number;
   pending_invoices: number;
   workers_active: number;
+  open_tasks: number;
+  overdue_tasks: number;
+  active_reservations: number;
+  reserved_units: Decimal;
 }
 
 export interface DashboardData {

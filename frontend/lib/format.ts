@@ -151,6 +151,29 @@ export const invoiceStatusMeta: Record<string, { tone: string; label: string }> 
   discrepancy: { tone: "danger", label: "Discrepancia" },
 };
 
+export const taskStatusMeta: Record<string, { tone: string; label: string }> = {
+  pending: { tone: "warning", label: "Pendiente" },
+  in_progress: { tone: "info", label: "En curso" },
+  blocked: { tone: "danger", label: "Bloqueada" },
+  done: { tone: "success", label: "Completada" },
+  cancelled: { tone: "neutral", label: "Cancelada" },
+};
+
+export const taskPriorityMeta: Record<number, { tone: string; label: string }> = {
+  1: { tone: "danger", label: "Crítica" },
+  2: { tone: "warning", label: "Alta" },
+  3: { tone: "info", label: "Media" },
+  4: { tone: "neutral", label: "Baja" },
+  5: { tone: "neutral", label: "Mínima" },
+};
+
+export const reservationStatusMeta: Record<string, { tone: string; label: string }> = {
+  active: { tone: "success", label: "Activa" },
+  released: { tone: "neutral", label: "Liberada" },
+  consumed: { tone: "info", label: "Consumida" },
+  expired: { tone: "warning", label: "Caducada" },
+};
+
 export const trackingLabel: Record<TrackingMode, string> = {
   quantity: "Cantidad",
   batch: "Lote",

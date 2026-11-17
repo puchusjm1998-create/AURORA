@@ -690,6 +690,11 @@ class Task(Base, TimestampMixin):
     due_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
+    assigned_employee: Mapped[Optional["Employee"]] = relationship(
+        foreign_keys=[assigned_to], lazy="joined"
+    )
+    creator: Mapped[Optional["User"]] = relationship(foreign_keys=[created_by], lazy="joined")
+
     __table_args__ = (CheckConstraint("priority BETWEEN 1 AND 5", name="task_priority_range"),)
 
 

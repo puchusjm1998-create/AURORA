@@ -45,6 +45,7 @@ from app.schemas import (
 )
 from app.services.audit import record_audit
 from app.services.sequences import next_code
+from app.services.reservations import expire_due
 from app.services.stock import StockEngine
 
 router = APIRouter(tags=["Catálogo e inventario"])
@@ -360,6 +361,7 @@ def product_whereabouts(
     product = db.get(Product, product_id)
     if product is None:
         raise NotFoundError("Producto", product_id)
+    expire_due(db)
     levels = list(
         db.scalars(
             select(StockLevel)

@@ -114,9 +114,36 @@ class StockEngine:
                 ) from None
         return level
 
+    def expire_due_reservations(self) -> list[StockReservation]:
+        """Release active reservations past their expiry date.
+
+        Expiry is enforced by the server (not only shown in the UI): the reserved
+        quantity returns to ``available`` before any stock is read or consumed.
+        """
+        now = utcnow()
+        due = list(
+            self.db.scalars(
+                select(StockReservation)
+                .where(
+                    StockReservation.status == ReservationStatus.ACTIVE,
+                    StockReservation.expires_at.isnot(None),
+                    StockReservation.expires_at < now,
+                )
+                .with_for_update()
+            ).all()
+        )
+        for reservation in due:
+            self.release_reservation(reservation)
+            reservation.status = ReservationStatus.EXPIRED
+            reservation.released_at = now
+        if due:
+            self.db.flush()
+        return due
+
     def _source_levels(
         self, product_id: str, location_id: str, pallet_id: str | None, quantity: Decimal
     ) -> list[StockLevel]:
+        self.expire_due_reservations()
         stmt = select(StockLevel).where(
             StockLevel.product_id == product_id,
             StockLevel.location_id == location_id,
@@ -180,6 +207,7 @@ class StockEngine:
 
     # -- public API ------------------------------------------------------
     def available(self, product_id: str, location_id: str | None = None, pallet_id: str | None = None) -> Decimal:
+        self.expire_due_reservations()
         stmt = select(StockLevel).where(StockLevel.product_id == product_id)
         if location_id:
             stmt = stmt.where(StockLevel.location_id == location_id)

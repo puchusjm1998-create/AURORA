@@ -182,3 +182,21 @@ migraciones (`AURORA_RUN_MIGRATIONS`). Los triggers de inmutabilidad se crean tr
 
 **Motivo.** Cambiar un esquema en producción sin historial no es aceptable. Los triggers no los
 gestiona Alembic, por lo que se aplican de forma idempotente en el bootstrap.
+
+## D-21. Las reservas comprometen stock, pero no lo mueven
+
+Reservar resta de `available` y suma en `reserved_quantity` de la posición exacta; la mercancía
+sigue físicamente donde estaba. Solo un movimiento confirmado cambia `quantity`, de modo que el
+libro inmutable sigue explicando cada unidad que sale del almacén. La caducidad se aplica en el
+servidor (no es un aviso visual): cualquier lectura de stock libera las reservas vencidas, las
+marca como `expired` y lo audita con actor `Sistema`. Así una reserva olvidada nunca bloquea stock
+para siempre, y la liberación queda explicada aunque no la haga una persona.
+
+## D-22. Las tareas de almacén no son movimientos
+
+Una tarea describe trabajo y responsabilidad (quién, qué, para cuándo), pero no altera el stock.
+Se separan de `StockMovement` para no duplicar la fuente de verdad ni permitir «cierre de tarea»
+como sustituto de una recepción o expedición. El ciclo de vida es explícito (`pending`,
+`in_progress`, `blocked`, `done`, `cancelled`), cada transición va a auditoría y las tareas
+cerradas no se editan (409). El nivel 4 puede leer y completar, pero el servidor comprueba que la
+tarea esté asignada a su propia ficha de empleado; la UI no es la que impone la restricción.

@@ -30,6 +30,7 @@ from app.core.db import SessionLocal, engine  # noqa: E402
 from app.core.enums import (  # noqa: E402
     MovementType,
     PalletStatus,
+    TaskStatus,
     TrackingMode,
 )
 from app.core.permissions import seed_rbac  # noqa: E402
@@ -46,6 +47,7 @@ from app.models import (  # noqa: E402
     Role,
     StockMovement,
     Supplier,
+    Task,
     User,
     Warehouse,
 )
@@ -475,6 +477,71 @@ def build(args: argparse.Namespace) -> None:
         )
         db.commit()
 
+        # -- Warehouse tasks ---------------------------------------------
+        now = datetime.now(timezone.utc)
+        task_specs = [
+            (
+                "Preparar pedido PEDIDO-DEMO-2031",
+                "Recoger 40 cajas del palé AUR-PAL-000004 y dejarlas en el muelle de salida.",
+                1,
+                "diego@aurora.demo",
+                TaskStatus.PENDING,
+                now + timedelta(hours=3),
+                None,
+            ),
+            (
+                "Recuento cíclico del pasillo P02",
+                "Verificar existencias físicas de las posiciones P02 y anotar diferencias antes del cierre.",
+                2,
+                "pablo@aurora.demo",
+                TaskStatus.IN_PROGRESS,
+                now + timedelta(hours=6),
+                None,
+            ),
+            (
+                "Revisar discrepancias de la factura TPK-2026/1181",
+                "Contrastar las líneas pendientes con las recepciones físicas y documentar la diferencia.",
+                2,
+                "encargado@aurora.demo",
+                TaskStatus.PENDING,
+                now + timedelta(days=1),
+                None,
+            ),
+            (
+                "Reubicar mercancía al picking de P01",
+                "Mover 20 cajas de FIS-8842 desde la reserva al hueco de picking.",
+                3,
+                "operario@aurora.demo",
+                TaskStatus.PENDING,
+                now + timedelta(days=1, hours=2),
+                None,
+            ),
+            (
+                "Precintar palé de devoluciones",
+                "Comprobado y precintado el palé de devoluciones del turno de mañana.",
+                4,
+                "pablo@aurora.demo",
+                TaskStatus.DONE,
+                now - timedelta(hours=2),
+                now - timedelta(hours=1),
+            ),
+        ]
+        for title, description, priority, email, status, due_at, completed_at in task_specs:
+            db.add(
+                Task(
+                    code=next_code(db, "task"),
+                    title=title,
+                    description=description,
+                    priority=priority,
+                    assigned_to=employees[email].id,
+                    status=status,
+                    due_at=due_at,
+                    completed_at=completed_at,
+                    created_by=supervisor.id,
+                )
+            )
+        db.commit()
+
         # -- Invoice reconciliation --------------------------------------
         # Invoice A fully received -> reconciled.
         for line in invoice_a.lines:
@@ -506,7 +573,7 @@ def build(args: argparse.Namespace) -> None:
 
         print("\n=== AURORA · datos de DEMOSTRACIÓN cargados ===")
         print(f"Almacén: {warehouse.code} · {warehouse.name}")
-        print(f"Ubicaciones: {len(locations)} · Productos: {len(products)} · Palés: 4")
+        print(f"Ubicaciones: {len(locations)} · Productos: {len(products)} · Palés: 4 · Tareas: {len(task_specs)}")
         print("Cuentas (contraseña única de demo):", DEMO_PASSWORD)
         for label, email in [
             ("Nivel 1 Administrador", "admin@aurora.demo"),

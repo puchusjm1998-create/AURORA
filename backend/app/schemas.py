@@ -530,6 +530,37 @@ class MovementRead(ORMBase):
     unit_codes: list[str] = []
 
 
+class TaskCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    description: str = ""
+    priority: int = Field(default=3, ge=1, le=5)
+    assigned_to: Optional[str] = None
+    due_at: Optional[datetime] = None
+
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    description: Optional[str] = None
+    priority: Optional[int] = Field(default=None, ge=1, le=5)
+    assigned_to: Optional[str] = None
+    due_at: Optional[datetime] = None
+
+
+class TaskRead(ORMBase):
+    code: str
+    title: str
+    description: str
+    status: TaskStatus
+    priority: int
+    assigned_to: Optional[str] = None
+    assignee_name: Optional[str] = None
+    assignee_code: Optional[str] = None
+    created_by_name: str = ""
+    due_at: Optional[UtcDateTime] = None
+    completed_at: Optional[UtcDateTime] = None
+    created_at: UtcDateTime
+
+
 class ReservationCreate(BaseModel):
     product_id: str
     location_id: str
@@ -640,6 +671,10 @@ class DashboardKpis(BaseModel):
     low_stock_products: int
     pending_invoices: int
     workers_active: int
+    open_tasks: int
+    overdue_tasks: int
+    active_reservations: int
+    reserved_units: Decimal
 
 
 class DashboardActivity(BaseModel):

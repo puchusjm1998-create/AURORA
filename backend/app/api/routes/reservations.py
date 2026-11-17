@@ -11,10 +11,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import RequestMeta, get_request_meta, require_permission
 from app.core.db import get_db
 from app.core.enums import PermissionCode, ReservationStatus
-from app.core.errors import ConflictError, NotFoundError
+from app.core.errors import ConflictError, NotFoundError, ValidationError
+from app.core.timeutils import utcnow
 from app.models import Location, StockReservation, User
 from app.schemas import Page, ReservationCreate, ReservationRead
 from app.services.audit import record_audit
+from app.services.reservations import expire_due
 from app.services.stock import StockEngine
 
 router = APIRouter(prefix="/reservations", tags=["Reservas"])
@@ -47,6 +49,7 @@ def list_reservations(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> Page[ReservationRead]:
+    expire_due(db)
     stmt = select(StockReservation)
     if status:
         stmt = stmt.where(StockReservation.status == status)
@@ -68,6 +71,11 @@ def create_reservation(
     user: User = Depends(require_permission(PermissionCode.RESERVATIONS_WRITE)),
     meta: RequestMeta = Depends(get_request_meta),
 ) -> ReservationRead:
+    if payload.expires_at is not None and payload.expires_at <= utcnow():
+        raise ValidationError(
+            "La caducidad de la reserva debe ser una fecha futura.",
+            code="invalid_expiry",
+        )
     engine = StockEngine(db)
     reservation = engine.reserve(
         product_id=payload.product_id,

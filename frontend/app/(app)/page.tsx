@@ -8,6 +8,7 @@ import {
   fmtNumber,
   fmtQty,
   fmtRelative,
+  num,
   movementBadge,
   movementDirection,
   movementLabel,
@@ -31,6 +32,8 @@ import {
   IconPallet,
   IconReports,
   IconRefresh,
+  IconReserve,
+  IconTask,
   IconScan,
   IconWarehouse,
 } from "@/components/icons";
@@ -64,6 +67,12 @@ export default function DashboardPage() {
             </button>
             <Link href="/escaner" className="btn btn-ghost">
               <IconCamera /> Escanear
+            </Link>
+            <Link href="/tareas" className="btn btn-ghost">
+              <IconTask /> Tareas
+            </Link>
+            <Link href="/reservas" className="btn btn-ghost">
+              <IconReserve /> Reservas
             </Link>
             <Link href="/operaciones" className="btn btn-primary">
               <IconScan /> Nueva operación
@@ -132,6 +141,37 @@ export default function DashboardPage() {
               label="Equipo activo"
               value={data.kpis.workers_active}
               meta={<span>{data.kpis.movements_draft} movimientos en borrador</span>}
+            />
+          </div>
+
+          <div className="grid grid-4">
+            <Stat
+              label="Tareas abiertas"
+              value={data.kpis.open_tasks}
+              meta={
+                <span>
+                  {data.kpis.overdue_tasks ? (
+                    <span className="text-danger">{data.kpis.overdue_tasks} vencidas</span>
+                  ) : (
+                    "sin vencimientos"
+                  )}
+                </span>
+              }
+            />
+            <Stat
+              label="Reservas activas"
+              value={data.kpis.active_reservations}
+              meta={<span>pedidos con stock comprometido</span>}
+            />
+            <Stat
+              label="Unidades reservadas"
+              value={fmtNumber(data.kpis.reserved_units, 0)}
+              meta={<span>no disponibles para otras salidas</span>}
+            />
+            <Stat
+              label="Disponible real"
+              value={fmtNumber(num(data.kpis.total_units) - num(data.kpis.reserved_units), 0)}
+              meta={<span>físico menos reservado</span>}
             />
           </div>
 

@@ -1,9 +1,10 @@
 # AURORA LOGISTICS AI
 
 Plataforma de gestión logística para almacenes de 10–50 trabajadores. Esta entrega cubre la
-**Fase 1 y la primera entrega funcional completa**: recepción → almacenamiento → localización →
-expedición, con inventario real, trazabilidad QR, palés, movimientos auditados, facturas de
-proveedor, personal, informes y panel de control.
+**Fase 1, la primera entrega funcional completa y la Fase 2**: recepción → almacenamiento →
+localización → expedición, con inventario real, trazabilidad QR, palés, movimientos auditados,
+reservas de stock, tareas de almacén asignadas, facturas de proveedor, personal, informes y panel
+de control.
 
 El sistema no es una maqueta: la interfaz habla con una API FastAPI que persiste en base de datos,
 valida permisos en el servidor y registra cada operación en un libro de auditoría inmutable.
@@ -39,6 +40,15 @@ valida permisos en el servidor y registra cada operación en un libro de auditor
 Además: facturas con documento original inmutable, conciliación, personal y cuentas con RBAC de
 5 niveles, auditoría append-only, informes CSV y página de transparencia `/sistema`.
 
+### Fase 2 entregada en esta iteración
+
+| Funcionalidad | Estado | Dónde |
+|---|---|---|
+| Reservas de stock por pedido, posición y caducidad | ✅ | `/reservas` (alta, liberación y caducidad automática) |
+| Tareas de almacén con responsable, prioridad y vencimiento | ✅ | `/tareas` (crear, iniciar, completar, cancelar, reabrir) |
+| Permisos específicos de tareas y reservas | ✅ | Semilla RBAC: nivel 4 solo lee y ejecuta sus tareas |
+| Indicadores de tareas y reservas en el panel | ✅ | `/` (abiertas, vencidas, reservas activas, unidades reservadas) |
+
 ### Lo que todavía no está implementado (y no se muestra como si lo estuviera)
 
 Estas capacidades pertenecen a fases posteriores y dependen de proveedores externos. La interfaz
@@ -50,7 +60,10 @@ las identifica explícitamente:
   manualmente. El estado se muestra como `not_configured`.
 - **Almacenamiento S3** (Fase 4): los originales se guardan ya de forma inmutable en disco local con
   estructura y SHA-256; el adaptador S3 queda pendiente.
-- **Redis/Celery** (Fase 4+): tareas asíncronas, informes programados y notificaciones.
+- **Redis/Celery** (Fase 4+): trabajos asíncronos (informes programados, notificaciones). Las
+  tareas de almacén de la Fase 2 ya son reales, pero se ejecutan de forma síncrona.
+- **Incidencias de almacén** (Fase 3): el modelo de datos existe, pero todavía no hay API ni
+  pantalla operativa; no se muestra ninguna maqueta.
 - **Telefonía SIP/API** (Fase 8) y **repartos/fichaje** (Fase 7).
 - **Informes PDF/Excel nativos** (Fase 9); los CSV actuales son reales y completos.
 
@@ -129,7 +142,7 @@ backend/
     db/            bootstrap, triggers de inmutabilidad
   alembic/         migraciones versionadas
   scripts/         seed_demo.py (dataset de demostración aislado)
-  tests/           34 pruebas automatizadas
+  tests/           37 pruebas automatizadas
 frontend/
   app/             rutas App Router (login y área autenticada)
   components/      design system, shell, selectores, escáner QR
@@ -211,9 +224,10 @@ cd backend
 ../.venv/bin/python -m pytest tests -q
 ```
 
-Resultado actual: **34 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
-etiquetas, escaneo, facturas, mapa del almacén, informes y auditoría). Las pruebas usan una base de
-datos SQLite temporal por ejecución; nunca tocan datos reales.
+Resultado actual: **37 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
+etiquetas, escaneo, facturas, mapa del almacén, reservas —incluida su caducidad—, tareas de
+almacén, informes y auditoría). Las pruebas usan una base de datos SQLite temporal por ejecución;
+nunca tocan datos reales.
 
 Verificación manual del flujo completo con la API en marcha:
 
@@ -222,7 +236,11 @@ Verificación manual del flujo completo con la API en marcha:
 3. `/operaciones` → recepción con producto, cantidad, lote y ubicación de destino.
 4. `/pales` → crear palé, añadir mercancía y precintar.
 5. `/producto` → comprobar posiciones exactas y unidades.
-6. `/operaciones` → expedición; `/movimientos` → ver el libro y confirmar el stock restante.
+6. `/reservas` → reservar unidades de una posición y comprobar que bajan las disponibles sin mover
+   mercancía; liberar la reserva y ver el stock restaurado.
+7. `/tareas` → crear una tarea asignada a un empleado, iniciarla y completarla; entrar como
+   `operario@aurora.demo` y comprobar que solo ve y ejecuta las tareas asignadas a él.
+8. `/operaciones` → expedición; `/movimientos` → ver el libro y confirmar el stock restante.
 
 ---
 

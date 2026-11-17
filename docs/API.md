@@ -165,12 +165,41 @@ Tipos: `reception`, `shipment`, `transfer`, `relocation`, `adjustment`, `return`
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/reservations` | Reservas activas por producto |
-| POST | `/reservations` | Reservar cantidad disponible |
-| POST | `/reservations/{id}/release` | Liberar reserva |
+| GET | `/reservations` | Lista paginada (`status`, `product_id`, `reference`, `limit`, `offset`) |
+| POST | `/reservations` | Reservar cantidad disponible en una posición exacta (201) |
+| POST | `/reservations/{id}/release` | Liberar reserva activa (409 si ya no lo está) |
 
-La reserva descuenta de `available` pero no mueve mercancía física. El stock reservado se muestra
-en la ficha del producto y en las posiciones.
+Cuerpo de alta: `product_id`, `location_id`, `pallet_id` (opcional), `quantity`, `reference` y
+`expires_at` (opcional, debe ser futura). La reserva descuenta de `available` pero no mueve
+mercancía física; el stock reservado se muestra en la ficha del producto y en las posiciones.
+
+La caducidad la aplica el servidor: al leer reservas, posiciones o el panel, toda reserva activa
+con `expires_at` vencido se libera, pasa a `expired` y deja rastro en auditoría con actor
+`Sistema (caducidad de reserva)`. Permisos: `reservations.read` (nivel ≥ 3) y
+`reservations.write` (nivel ≥ 3).
+
+## Tareas de almacén
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/tasks` | Lista paginada (`status` CSV, `assigned_to`, `mine`, `priority`, `search`) |
+| GET | `/tasks/{id}` | Detalle con responsable y autor |
+| POST | `/tasks` | Crear tarea (201) |
+| PATCH | `/tasks/{id}` | Editar título, descripción, prioridad, responsable o vencimiento |
+| POST | `/tasks/{id}/start` | Pasar a `in_progress` |
+| POST | `/tasks/{id}/complete` | Cerrar como `done` (solo si está abierta) |
+| POST | `/tasks/{id}/cancel` | Cancelar (409 si ya está cerrada) |
+| POST | `/tasks/{id}/reopen` | Reabrir una tarea cerrada a `pending` |
+
+Estados: `pending`, `in_progress`, `blocked`, `done`, `cancelled`. Código legible `AUR-TSK-*`.
+Cada transición se audita (`task.created`, `task.updated`, `task.started`, `task.completed`,
+`task.cancelled`, `task.reopened`). Una tarea **no** mueve stock: documenta el trabajo y su
+responsable; la mercancía se mueve con movimientos confirmados.
+
+RBAC: niveles 1–3 tienen `tasks.read`, `tasks.write` y `tasks.complete`; el nivel 4 (trabajador)
+solo `tasks.read` y `tasks.complete`, y únicamente sobre tareas asignadas a su ficha de empleado
+(si no tiene ficha vinculada o la tarea es de otra persona, la respuesta es 403). El nivel 5
+(auditor) solo lee. `PATCH` sobre una tarea cerrada devuelve 409 `task_closed`.
 
 ## Facturas y conciliación
 
@@ -221,7 +250,7 @@ desactivar la propia cuenta.
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/dashboard` | KPIs, ocupación, top productos, stock bajo y actividad reciente |
+| GET | `/dashboard` | KPIs (incluye tareas abiertas/vencidas y reservas activas), ocupación, top productos, stock bajo y actividad reciente |
 | GET | `/audit` | Auditoría filtrable (`action`, `entity_type`, `actor`, fechas) |
 | GET | `/reports/summary` | Valoración por categoría (coste, venta, margen) |
 | GET | `/reports/inventory.csv` | Inventario detallado (UTF-8 con BOM, separador `;`) |

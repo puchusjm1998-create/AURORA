@@ -16,7 +16,8 @@ from app.api.deps import require_permission
 from app.core.db import get_db
 from app.core.enums import PermissionCode
 from app.core.errors import ValidationError
-from app.core.timeutils import madrid_day_bounds_utc
+from app.core.timeutils import madrid_day_bounds_utc, utcnow
+from app.services.reservations import expire_due
 from app.models import (
     AuditLog,
     Employee,
@@ -26,6 +27,8 @@ from app.models import (
     Product,
     StockLevel,
     StockMovement,
+    StockReservation,
+    Task,
     User,
     Warehouse,
 )
@@ -143,6 +146,7 @@ def dashboard(
         or 0
     )
 
+    expire_due(db)
     pending_invoices = int(
         db.scalar(
             select(func.count(Invoice.id)).where(
@@ -153,6 +157,37 @@ def dashboard(
     )
     workers_active = int(
         db.scalar(select(func.count(Employee.id)).where(Employee.status == "active")) or 0
+    )
+
+    open_task_statuses = ["pending", "in_progress", "blocked"]
+    open_tasks = int(
+        db.scalar(select(func.count(Task.id)).where(Task.status.in_(open_task_statuses))) or 0
+    )
+    overdue_tasks = int(
+        db.scalar(
+            select(func.count(Task.id)).where(
+                Task.status.in_(open_task_statuses),
+                Task.due_at.isnot(None),
+                Task.due_at < utcnow(),
+            )
+        )
+        or 0
+    )
+    active_reservations = int(
+        db.scalar(
+            select(func.count(StockReservation.id)).where(StockReservation.status == "active")
+        )
+        or 0
+    )
+    reserved_units = Decimal(
+        str(
+            db.scalar(
+                select(func.coalesce(func.sum(StockReservation.quantity), 0)).where(
+                    StockReservation.status == "active"
+                )
+            )
+            or 0
+        )
     )
 
     kpis = DashboardKpis(
@@ -171,6 +206,10 @@ def dashboard(
         low_stock_products=low_stock_count,
         pending_invoices=pending_invoices,
         workers_active=workers_active,
+        open_tasks=open_tasks,
+        overdue_tasks=overdue_tasks,
+        active_reservations=active_reservations,
+        reserved_units=reserved_units,
     )
 
     occupancy_rows = db.execute(

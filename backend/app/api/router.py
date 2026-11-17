@@ -13,6 +13,7 @@ from app.api.routes import (
     people,
     reservations,
     system,
+    tasks,
     warehouses,
 )
 
@@ -24,6 +25,7 @@ api_router.include_router(catalog.router)
 api_router.include_router(pallets.router)
 api_router.include_router(movements.router)
 api_router.include_router(reservations.router)
+api_router.include_router(tasks.router)
 api_router.include_router(invoices.router)
 api_router.include_router(people.router)
 api_router.include_router(analytics.router)

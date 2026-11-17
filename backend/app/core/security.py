@@ -96,6 +96,10 @@ class SlidingWindowLimiter:
         self._hits: dict[str, deque[float]] = defaultdict(deque)
         self._lock = threading.Lock()
 
+    def reset_all(self) -> None:
+        with self._lock:
+            self._hits.clear()
+
     def allow(self, key: str) -> bool:
         now = time.monotonic()
         with self._lock:

@@ -351,7 +351,15 @@ desactivar la propia cuenta.
 | GET | `/audit` | Auditoría filtrable (`action`, `entity_type`, `actor`, fechas) |
 | GET | `/reports/summary` | Valoración por categoría (coste, venta, margen) |
 | GET | `/reports/inventory.csv` | Inventario detallado (UTF-8 con BOM, separador `;`) |
+| GET | `/reports/inventory.pdf` | Inventario en PDF A4 apaisado, cabecera repetida y totales |
+| GET | `/reports/inventory.xlsx` | Inventario en Excel con hoja Resumen, autofiltro y totales |
 | GET | `/reports/movements.csv` | Libro de movimientos (`date_from`, `date_to`) |
+| GET | `/reports/movements.pdf` | Movimientos en PDF paginado (máximo 4.000 filas maquetadas) |
+| GET | `/reports/movements.xlsx` | Movimientos en Excel nativo, fechas y cantidades numéricas |
+
+Los informes PDF y Excel exigen `reports.export` igual que el CSV. Si el PDF supera 4.000 filas,
+el subtítulo lo indica y remite al Excel/CSV para el detalle completo; nunca se recorta en silencio.
+El Excel incluye hoja `Resumen` con fecha de generación, filtros y número de filas.
 
 La auditoría es append-only: triggers de base de datos rechazan `UPDATE` y `DELETE` sobre
 `audit_logs`, y también la eliminación de movimientos de stock.

@@ -30,8 +30,9 @@ export default function ReportsPage() {
   const totalSale = summary.data?.categories.reduce((acc, item) => acc + Number(item.sale_value), 0) ?? 0;
   const totalUnits = summary.data?.categories.reduce((acc, item) => acc + Number(item.units), 0) ?? 0;
 
-  async function exportCsv(kind: "inventory" | "movements") {
-    setBusy(kind);
+  async function exportReport(kind: "inventory" | "movements", format: "csv" | "pdf" | "xlsx") {
+    const key = `${kind}-${format}`;
+    setBusy(key);
     try {
       const params = new URLSearchParams();
       if (kind === "movements") {
@@ -39,8 +40,14 @@ export default function ReportsPage() {
         if (dateTo) params.set("date_to", new Date(`${dateTo}T23:59:59`).toISOString());
       }
       const suffix = params.toString() ? `?${params.toString()}` : "";
-      await downloadFile(`/api/v1/reports/${kind}.csv${suffix}`, `aurora-${kind}.csv`);
-      toast.success("Informe descargado", "Archivo CSV compatible con Excel (UTF-8).");
+      await downloadFile(`/api/v1/reports/${kind}.${format}${suffix}`, `aurora-${kind}.${format}`);
+      const detail =
+        format === "csv"
+          ? "CSV completo en UTF-8."
+          : format === "xlsx"
+            ? "Excel nativo con resumen, filtros y totales."
+            : "PDF paginado listo para imprimir o archivar.";
+      toast.success("Informe descargado", detail);
     } catch (err) {
       toast.error("No se pudo generar el informe", errorMessage(err));
     } finally {
@@ -127,21 +134,27 @@ export default function ReportsPage() {
             </Card>
 
             <div className="side-panel">
-              <Card title="Exportaciones CSV" subtitle="Datos completos, sin muestras">
+              <Card title="Exportaciones nativas" subtitle="PDF, Excel y CSV con los datos completos">
                 <div className="stack" style={{ gap: 12 }}>
                   <div>
-                    <button
-                      type="button"
-                      className="btn btn-block"
-                      onClick={() => exportCsv("inventory")}
-                      disabled={!can("reports.export") || busy === "inventory"}
-                    >
-                      {busy === "inventory" ? <span className="spinner" /> : <IconDownload />}
-                      Inventario detallado
-                    </button>
-                    <p className="hint" style={{ marginTop: 5 }}>
+                    <strong>Inventario detallado</strong>
+                    <p className="hint" style={{ marginTop: 3 }}>
                       SKU, ubicación, palé, físico, reservado, disponible, precios y valor.
                     </p>
+                    <div className="grid grid-3" style={{ gap: 6, marginTop: 8 }}>
+                      {(["pdf", "xlsx", "csv"] as const).map((format) => (
+                        <button
+                          key={format}
+                          type="button"
+                          className={format === "xlsx" ? "btn btn-block" : "btn btn-ghost btn-block"}
+                          onClick={() => exportReport("inventory", format)}
+                          disabled={!can("reports.export") || busy === `inventory-${format}`}
+                        >
+                          {busy === `inventory-${format}` ? <span className="spinner" /> : <IconDownload />}
+                          {format === "xlsx" ? "Excel" : format.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div className="row" style={{ gap: 8 }}>
                     <Field label="Desde">
@@ -162,18 +175,24 @@ export default function ReportsPage() {
                     </Field>
                   </div>
                   <div>
-                    <button
-                      type="button"
-                      className="btn btn-block"
-                      onClick={() => exportCsv("movements")}
-                      disabled={!can("reports.export") || busy === "movements"}
-                    >
-                      {busy === "movements" ? <span className="spinner" /> : <IconDownload />}
-                      Movimientos
-                    </button>
-                    <p className="hint" style={{ marginTop: 5 }}>
-                      Libro completo con tipo, estado, origen, destino, trabajador y confirmación física.
+                    <strong>Libro de movimientos</strong>
+                    <p className="hint" style={{ marginTop: 3 }}>
+                      Tipo, estado, origen, destino, lote, documento y confirmación física.
                     </p>
+                    <div className="grid grid-3" style={{ gap: 6, marginTop: 8 }}>
+                      {(["pdf", "xlsx", "csv"] as const).map((format) => (
+                        <button
+                          key={format}
+                          type="button"
+                          className={format === "xlsx" ? "btn btn-block" : "btn btn-ghost btn-block"}
+                          onClick={() => exportReport("movements", format)}
+                          disabled={!can("reports.export") || busy === `movements-${format}`}
+                        >
+                          {busy === `movements-${format}` ? <span className="spinner" /> : <IconDownload />}
+                          {format === "xlsx" ? "Excel" : format.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   {!can("reports.export") ? (
                     <Badge tone="warning">Su perfil solo puede consultar, no exportar</Badge>
@@ -181,26 +200,26 @@ export default function ReportsPage() {
                 </div>
               </Card>
 
-              <div className="alert warning">
-                <strong>PDF y Excel nativo · Fase 9</strong>
+              <div className="alert">
+                <strong>Documentos reales, sin plantillas simuladas</strong>
                 <span>
-                  Los informes CSV son reales y completos. La generación en PDF/Excel con plantillas y los
-                  informes programados se implementarán en la fase de documentación avanzada; no se muestran
-                  como disponibles.
+                  El PDF se genera paginado con cabecera repetida y totales; el Excel incluye hoja de resumen,
+                  cabecera fija, autofiltro, formatos numéricos y fila de totales. Los informes programados por
+                  correo siguen pendientes y no se anuncian como disponibles.
                 </span>
               </div>
             </div>
           </div>
 
-          <Card title="Informes previstos" subtitle="Hoja de ruta de documentación">
+          <Card title="Cobertura de informes" subtitle="Qué se puede descargar hoy y qué queda pendiente">
             <div className="grid grid-3">
               {[
-                ["Inventario diario / mensual / anual", "Programado"],
-                ["Existencias por ubicación y valoración", "Disponible (CSV)"],
-                ["Entradas y salidas por periodo", "Disponible (CSV)"],
-                ["Facturación y conciliaciones", "Parcial (pantalla)"],
-                ["Repartos y trabajadores", "Fase 7-8"],
-                ["Incidencias y auditoría", "Auditoría disponible"],
+                ["Inventario y valoración", "PDF, Excel y CSV"],
+                ["Entradas y salidas por periodo", "PDF, Excel y CSV"],
+                ["Facturación y conciliaciones", "Pantalla (exportación pendiente)"],
+                ["Repartos y trabajadores", "Pantalla (exportación pendiente)"],
+                ["Incidencias y auditoría", "Pantalla y auditoría"],
+                ["Envío programado por correo", "Pendiente"],
               ].map(([title, status]) => (
                 <div key={title} className="alert" style={{ borderLeftColor: "var(--accent)" }}>
                   <strong>{title}</strong>

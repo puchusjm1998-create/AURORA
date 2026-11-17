@@ -262,3 +262,23 @@ de `pytest`: `smoke_test.py` (salud, login y lecturas de todos los módulos, má
 en el host; con SQLite la copia en caliente es consistente, pero el tráfico concurrente puede
 introducir latencia (las cifras locales de referencia se obtuvieron con 6 usuarios y 6 s). No hay
 métricas Prometheus/OpenTelemetry ni alertas automáticas: `/sistema` lo mantiene como pendiente.
+
+---
+
+## D-28 · Informes PDF y Excel generados en el servidor
+
+**Decisión.** El PDF se compone con ReportLab (`LongTable` con cabecera repetida, pie con página y
+totales) y el Excel con openpyxl (hoja `Resumen`, hoja de datos con cabecera fija, autofiltro,
+formatos numéricos y fila de totales). Ambos reutilizan exactamente los mismos datos que el CSV:
+una sola función construye el `ReportTable` y los tres formatos lo representan. El PDF limita la
+maqueta a 4.000 filas y lo advierte en el subtítulo; Excel y CSV no limitan.
+
+**Por qué.** Los informes son documentos que se archivan y se envían a terceros: deben ser reales,
+reproducibles y con cifras que cuadren con la pantalla. Generarlos en el servidor evita depender de
+librerías JavaScript pesadas, mantiene el control de permisos y conserva el formato español
+(`1.234,500` en PDF, celdas numéricas con formato en Excel). Las dependencias se fijan en
+`requirements.txt` y el contenedor las instala en la construcción.
+
+**Límites.** No hay plantillas configurables por cliente ni envío programado por correo; el PDF es
+una representación tabular, no un documento con logotipo corporativo cargado por el usuario.
+Ambas cosas permanecen en la lista de pendientes de `/sistema`.

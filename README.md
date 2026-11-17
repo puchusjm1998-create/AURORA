@@ -56,6 +56,7 @@ Además: facturas con documento original inmutable, conciliación, personal y cu
 | Repartos con vehículos, palés y expedición real de stock | ✅ | `/repartos` y ficha `/reparto` (cargar = salida auditada) |
 | Indicadores operativos en el panel | ✅ | `/` (tareas, reservas, incidencias y disponible real) |
 | Copias verificables, prueba de humo y prueba de carga | ✅ | `scripts/backup.py`, `smoke_test.py`, `load_test.py` (ver `docs/DEPLOYMENT.md`) |
+| Informes PDF y Excel nativos | ✅ | `/informes` (PDF paginado, Excel con resumen y totales) |
 
 ### Lo que todavía no está implementado (y no se muestra como si lo estuviera)
 
@@ -72,8 +73,8 @@ las identifica explícitamente:
   tareas de almacén de la Fase 2 ya son reales, pero se ejecutan de forma síncrona.
 - **Telefonía SIP/API, GPS de repartos y firma digital de entrega** (Fase 8); **tarjetas NFC,
   turnos planificados y bolsa de horas** (Fase 7). Los repartos ya expiden stock real.
-- **Informes PDF/Excel nativos y monitorización externa** (fases posteriores); los CSV actuales
-  son reales y completos y la operación ya incluye copias verificables, humo y carga.
+- **Monitorización externa y envío programado de informes** (fases posteriores); los informes ya
+  se descargan en PDF, Excel y CSV reales, y la operación incluye copias verificables, humo y carga.
 - **Calibración del modelo de distancias** con el plano real del almacén y tiempos medidos (Fase 6
   avanzada): hoy las sugerencias son reales, pero la geometría es una aproximación declarada.
 
@@ -152,7 +153,7 @@ backend/
     db/            bootstrap, triggers de inmutabilidad
   alembic/         migraciones versionadas
   scripts/         seed_demo.py, backup.py, smoke_test.py y load_test.py
-  tests/           52 pruebas automatizadas
+  tests/           57 pruebas automatizadas
 frontend/
   app/             rutas App Router (login y área autenticada)
   components/      design system, shell, selectores, escáner QR
@@ -234,11 +235,12 @@ cd backend
 ../.venv/bin/python -m pytest tests -q
 ```
 
-Resultado actual: **52 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
+Resultado actual: **57 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
 etiquetas, escaneo, facturas, mapa del almacén, reservas —incluida su caducidad—, tareas de
 almacén, incidencias, fichaje —secuencias y resumen de horas—, optimización de ubicaciones y
 rutas, repartos con expedición de stock, informes, auditoría y herramientas de operación: copia
-con manifiesto SHA-256, retención y restauración). Las pruebas usan una base de datos SQLite
+con manifiesto SHA-256, retención y restauración, e informes PDF/Excel con contenido verificado).
+Las pruebas usan una base de datos SQLite
 temporal por ejecución; nunca tocan datos reales.
 
 Prueba de humo y de carga contra una instancia real (no forman parte de `pytest`):

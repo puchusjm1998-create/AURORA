@@ -176,7 +176,7 @@ def healthz() -> dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
-# Static frontend (Next.js static export) with SPA history fallback
+# Static frontend (Next.js static export): exact routes, no SPA rewrite
 # ---------------------------------------------------------------------------
 def _serve_static(full_path: str) -> Response:
     if not FRONTEND_OUT.exists():
@@ -196,7 +196,8 @@ def _serve_static(full_path: str) -> Response:
     if relative:
         base = (root / relative).resolve()
         candidates.extend([base, base / "index.html", base.with_suffix(".html")])
-    candidates.append(root / "index.html")
+    else:
+        candidates.append(root / "index.html")
 
     for candidate in candidates:
         try:

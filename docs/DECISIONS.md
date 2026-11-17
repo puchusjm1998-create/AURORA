@@ -98,8 +98,9 @@ esquema propio es estable, y el código legible permite operar si la cámara fal
 
 ## D-11. Frontend estático servido por FastAPI
 
-**Decisión.** Next.js con `output: "export"` y `trailingSlash`; FastAPI sirve `frontend/out` con
-fallback a `index.html` y rutas de directorio.
+**Decisión.** Next.js con `output: "export"` y `trailingSlash`; FastAPI sirve `frontend/out`
+resolviendo rutas de directorio (`/pale/` → `pale/index.html`) y devuelve la página 404 de Next
+para rutas inexistentes.
 
 **Motivo.** Mismo origen ⇒ cookie first-party sin CORS ni proxy adicional, menos superficie de
 despliegue y PWA sencilla. El coste es renunciar a SSR dinámico, aceptable porque la aplicación es

@@ -236,3 +236,31 @@ class ScheduleFrequency(StrEnum):
 class ScheduleRunStatus(StrEnum):
     SENT = "sent"
     FAILED = "failed"
+
+class AlertMetric(StrEnum):
+    OPEN_TASKS = "open_tasks"
+    OVERDUE_TASKS = "overdue_tasks"
+    OPEN_INCIDENTS = "open_incidents"
+    ACTIVE_RESERVATIONS = "active_reservations"
+    PENDING_DELIVERIES = "pending_deliveries"
+    LOW_STOCK_PRODUCTS = "low_stock_products"
+    STOCK_UNITS = "stock_units"
+
+
+class AlertOperator(StrEnum):
+    GT = "gt"
+    GTE = "gte"
+    LT = "lt"
+    LTE = "lte"
+
+
+class AlertSeverity(StrEnum):
+    INFO = "info"
+    WARNING = "warning"
+    CRITICAL = "critical"
+
+
+class AlertStatus(StrEnum):
+    OPEN = "open"
+    ACKNOWLEDGED = "acknowledged"
+    RESOLVED = "resolved"

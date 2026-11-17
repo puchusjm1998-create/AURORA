@@ -358,6 +358,27 @@ Prueba recomendada antes de producción: cree una programación con su propia cu
 **Enviar** y confirme que el adjunto (PDF/Excel/CSV) llega y abre correctamente. El flujo completo
 está cubierto por pruebas automatizadas contra un servidor SMTP local.
 
+### Evaluación de alertas
+
+Las reglas se evalúan con un trabajo independiente; crear alertas es el resultado normal de una
+condición real, así que el script solo sale con 1 si una regla falla al evaluarse:
+
+```cron
+*/5 * * * * cd /opt/aurora/backend && ../.venv/bin/python -m scripts.evaluate_alerts >> /var/log/aurora-alerts.log 2>&1
+```
+
+```bash
+cd backend
+../.venv/bin/python -m scripts.evaluate_alerts --dry-run   # ver indicadores y umbrales
+../.venv/bin/python -m scripts.evaluate_alerts             # crear alertas y notificar
+```
+
+Revise el resultado en `/alertas`. Una regla sin alertas sin resolver no vuelve a avisar; tras
+resolverla se respeta `cooldown_minutes` antes de crear otra. Los correos usan la misma
+configuración SMTP que los informes programados (`AURORA_SMTP_*`); sin SMTP la alerta se crea con
+`notification_error` y sigue visible en la aplicación. Las transiciones quedan en auditoría
+(`alert.triggered/acknowledged/resolved`).
+
 ### Trazas OpenTelemetry
 
 Active las trazas solo si hay un colector OTLP disponible:

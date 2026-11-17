@@ -40,6 +40,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.core.enums import (
+    AlertMetric,
+    AlertOperator,
+    AlertSeverity,
+    AlertStatus,
     AttendanceEventType,
     DeliveryStatus,
     EmployeeStatus,
@@ -871,3 +875,72 @@ class ReportSchedule(Base, TimestampMixin):
     )
 
     creator: Mapped[Optional["User"]] = relationship(foreign_keys=[created_by], lazy="joined")
+
+
+class AlertRule(Base, TimestampMixin):
+    """Regla de alerta operativa evaluada contra métricas de negocio."""
+
+    __tablename__ = "alert_rules"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    metric: Mapped[AlertMetric] = mapped_column(
+        enum_column(AlertMetric, "alert_metric"), nullable=False
+    )
+    operator: Mapped[AlertOperator] = mapped_column(
+        enum_column(AlertOperator, "alert_operator"), nullable=False
+    )
+    threshold: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    severity: Mapped[AlertSeverity] = mapped_column(
+        enum_column(AlertSeverity, "alert_severity"), default=AlertSeverity.WARNING, nullable=False
+    )
+    cooldown_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    notify_emails: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+
+    creator: Mapped[Optional["User"]] = relationship(foreign_keys=[created_by], lazy="joined")
+    alerts: Mapped[list["Alert"]] = relationship(back_populates="rule", lazy="selectin")
+
+
+class Alert(Base, TimestampMixin):
+    """Aviso generado por una regla, con reconocimiento y resolución auditados."""
+
+    __tablename__ = "alerts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    rule_id: Mapped[str] = mapped_column(
+        ForeignKey("alert_rules.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    status: Mapped[AlertStatus] = mapped_column(
+        enum_column(AlertStatus, "alert_status"), default=AlertStatus.OPEN, nullable=False
+    )
+    severity: Mapped[AlertSeverity] = mapped_column(
+        enum_column(AlertSeverity, "alert_severity_value"), nullable=False
+    )
+    metric_value: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    threshold: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    trigger_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    message: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    triggered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False, index=True
+    )
+    notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    notification_error: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    acknowledged_by: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    resolved_by: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    note: Mapped[str] = mapped_column(Text, default="", nullable=False)
+
+    rule: Mapped["AlertRule"] = relationship(back_populates="alerts", lazy="joined")
+    acknowledger: Mapped[Optional["User"]] = relationship(
+        foreign_keys=[acknowledged_by], lazy="joined"
+    )
+    resolver: Mapped[Optional["User"]] = relationship(foreign_keys=[resolved_by], lazy="joined")

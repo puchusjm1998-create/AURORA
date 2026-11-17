@@ -13,6 +13,10 @@ from typing import Annotated, Any, Generic, Literal, Optional, TypeVar
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator, model_validator
 
 from app.core.enums import (
+    AlertMetric,
+    AlertOperator,
+    AlertSeverity,
+    AlertStatus,
     AttendanceEventType,
     DeliveryStatus,
     EmployeeStatus,
@@ -1090,3 +1094,109 @@ class ReportScheduleRun(BaseModel):
     status: str
     message_id: Optional[str] = None
     detail: str = ""
+
+
+def _validate_emails(values: list[str]) -> list[str]:
+    import re
+
+    cleaned: list[str] = []
+    for value in values:
+        candidate = value.strip()
+        if not re.match(EMAIL_PATTERN, candidate):
+            raise ValueError(f"Correo no válido: {value}")
+        if candidate.lower() not in [item.lower() for item in cleaned]:
+            cleaned.append(candidate)
+    return cleaned
+
+
+class AlertRuleCreate(BaseModel):
+    name: str = Field(min_length=3, max_length=120)
+    metric: AlertMetric
+    operator: AlertOperator
+    threshold: Decimal = Field(ge=0, le=Decimal("1000000000"))
+    severity: AlertSeverity = AlertSeverity.WARNING
+    cooldown_minutes: int = Field(default=60, ge=0, le=1440)
+    notify_emails: list[str] = Field(default_factory=list, max_length=10)
+    is_active: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def _clean_alert_name(cls, value: str) -> str:
+        value = " ".join(value.split())
+        if len(value) < 3:
+            raise ValueError("El nombre debe tener al menos 3 caracteres")
+        return value
+
+    @field_validator("notify_emails")
+    @classmethod
+    def _check_notify_emails(cls, value: list[str]) -> list[str]:
+        return _validate_emails(value)
+
+
+class AlertRuleUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=3, max_length=120)
+    metric: Optional[AlertMetric] = None
+    operator: Optional[AlertOperator] = None
+    threshold: Optional[Decimal] = Field(default=None, ge=0, le=Decimal("1000000000"))
+    severity: Optional[AlertSeverity] = None
+    cooldown_minutes: Optional[int] = Field(default=None, ge=0, le=1440)
+    notify_emails: Optional[list[str]] = Field(default=None, max_length=10)
+    is_active: Optional[bool] = None
+
+
+class AlertRuleRead(ORMBase):
+    name: str
+    metric: AlertMetric
+    operator: AlertOperator
+    threshold: Decimal
+    severity: AlertSeverity
+    cooldown_minutes: int
+    notify_emails: list[str]
+    is_active: bool
+    created_by: Optional[str] = None
+    creator_name: Optional[str] = None
+    created_at: UtcDateTime
+    updated_at: UtcDateTime
+
+
+class AlertRead(ORMBase):
+    rule_id: str
+    status: AlertStatus
+    severity: AlertSeverity
+    metric_value: Decimal
+    threshold: Decimal
+    trigger_count: int
+    message: str
+    triggered_at: UtcDateTime
+    notified_at: Optional[UtcDateTime] = None
+    notification_error: str = ""
+    acknowledged_at: Optional[UtcDateTime] = None
+    acknowledged_by: Optional[str] = None
+    resolved_at: Optional[UtcDateTime] = None
+    resolved_by: Optional[str] = None
+    note: str = ""
+    created_at: UtcDateTime
+    updated_at: UtcDateTime
+    rule_name: Optional[str] = None
+    metric: Optional[str] = None
+    operator: Optional[str] = None
+    acknowledger_name: Optional[str] = None
+    resolver_name: Optional[str] = None
+
+
+class AlertAction(BaseModel):
+    note: str = Field(default="", max_length=500)
+
+
+class AlertMetricValue(BaseModel):
+    metric: AlertMetric
+    label: str
+    unit: str
+    value: Decimal
+
+
+class AlertEvaluationResult(BaseModel):
+    evaluated: int
+    triggered: int
+    skipped: int
+    alerts: list[AlertRead]

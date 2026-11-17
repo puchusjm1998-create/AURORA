@@ -343,3 +343,27 @@ depuración local; en producción se limita el volumen.
 **Límites.** No se instrumenta el cliente SMTP ni trabajos externos (el planificador se ejecuta en
 otro proceso y puede instrumentarse después). Sin colector configurado, el exportador OTLP falla
 silenciosamente al enviar y no bloquea la aplicación. No hay propagación de baggage de negocio.
+
+---
+
+## D-32 · Alertas gestionadas con reglas declarativas y ciclo de vida auditable
+
+**Decisión.** Una regla declara indicador (`open_tasks`, `overdue_tasks`, `open_incidents`,
+`active_reservations`, `pending_deliveries`, `low_stock_products`, `stock_units`), operador
+(`gt/gte/lt/lte`), umbral, severidad, cooldown y destinatarios opcionales. Las reglas se evalúan
+con `POST /alerts/evaluate` o con `scripts.evaluate_alerts` en cron; cada cumplimiento crea una
+alerta que no se duplica mientras siga abierta o reconocida y respeta el cooldown tras resolverse.
+El ciclo es `open → acknowledged → resolved`, con usuario y nota en cada paso y auditoría
+`alert.triggered/acknowledged/resolved`. Una regla con alertas no se borra: se pausa.
+
+**Por qué.** Los umbrales son datos, no código: operaciones puede ajustarlos sin desplegar. Las
+alertas se calculan con consultas reales a la misma base de datos que usa la operación, así que no
+hay métricas inventadas ni copias desincronizadas. Reutilizar el `mailer` de la Fase 12 evita un
+segundo camino de correo y permite probar con un SMTP local. El cooldown y la deduplicación evitan
+tormentas de avisos cuando una condición persiste.
+
+**Límites.** La evaluación es síncrona (cron), no hay escalado automático ni envío SMS/Slack. No se
+resuelven alertas automáticamente cuando el indicador vuelve a rango: la resolución es humana para
+dejar constancia. Los correos se envían en claro salvo STARTTLS/SSL y no hay reintentos: si el SMTP
+falla, la alerta queda visible con `notification_error` y el operador puede resolverla o repetir el
+envío. Las métricas se calculan sobre el inventario y la operación actual, sin ventanas históricas.

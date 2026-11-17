@@ -697,3 +697,74 @@ export interface ReportScheduleRun {
   message_id: string | null;
   detail: string;
 }
+
+/* ------------------------------------------------------------------ */
+/* Alertas gestionadas                                                 */
+/* ------------------------------------------------------------------ */
+export type AlertMetric =
+  | "open_tasks"
+  | "overdue_tasks"
+  | "open_incidents"
+  | "active_reservations"
+  | "pending_deliveries"
+  | "low_stock_products"
+  | "stock_units";
+export type AlertOperator = "gt" | "gte" | "lt" | "lte";
+export type AlertSeverity = "info" | "warning" | "critical";
+export type AlertStatus = "open" | "acknowledged" | "resolved";
+
+export interface AlertMetricValue {
+  metric: AlertMetric;
+  label: string;
+  unit: string;
+  value: string;
+}
+
+export interface AlertRule {
+  id: string;
+  name: string;
+  metric: AlertMetric;
+  operator: AlertOperator;
+  threshold: string;
+  severity: AlertSeverity;
+  cooldown_minutes: number;
+  notify_emails: string[];
+  is_active: boolean;
+  created_by: string | null;
+  creator_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Alert {
+  id: string;
+  rule_id: string;
+  status: AlertStatus;
+  severity: AlertSeverity;
+  metric_value: string;
+  threshold: string;
+  trigger_count: number;
+  message: string;
+  triggered_at: string;
+  notified_at: string | null;
+  notification_error: string;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  note: string;
+  created_at: string;
+  updated_at: string;
+  rule_name: string | null;
+  metric: string | null;
+  operator: string | null;
+  acknowledger_name: string | null;
+  resolver_name: string | null;
+}
+
+export interface AlertEvaluationResult {
+  evaluated: number;
+  triggered: number;
+  skipped: number;
+  alerts: Alert[];
+}

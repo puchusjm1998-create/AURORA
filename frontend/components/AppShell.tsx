@@ -48,6 +48,7 @@ const NAV: NavEntry[] = [
   { href: "/operaciones", label: "Operaciones", permission: "movements.write", icon: <IconActivity />, group: "Operación" },
   { href: "/tareas", label: "Tareas", permission: "tasks.read", icon: <IconTask />, group: "Operación" },
   { href: "/incidencias", label: "Incidencias", permission: "incidents.read", icon: <IconIncident />, group: "Operación" },
+  { href: "/alertas", label: "Alertas", permission: "incidents.read", icon: <IconAlert />, group: "Operación" },
   { href: "/optimizacion", label: "Optimización", permission: "inventory.read", icon: <IconRoute />, group: "Operación" },
   { href: "/fichaje", label: "Fichaje", permission: "attendance.clock", icon: <IconClock />, group: "Operación" },
   { href: "/inventario", label: "Inventario", permission: "inventory.read", icon: <IconBox />, group: "Inventario", match: "/producto" },

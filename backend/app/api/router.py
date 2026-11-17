@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    alerts,
     analytics,
     auth,
     catalog,
@@ -39,4 +40,5 @@ api_router.include_router(invoices.router)
 api_router.include_router(people.router)
 api_router.include_router(analytics.router)
 api_router.include_router(report_schedules.router)
+api_router.include_router(alerts.router)
 api_router.include_router(labels.router)

@@ -368,6 +368,28 @@ desactivar la propia cuenta.
 | POST | `/report-schedules/{id}/run` | Genera y envía ahora; no altera el próximo envío |
 | GET | `/report-schedules/config` | Estado de SMTP, programaciones activas y vencidas |
 
+### Alertas gestionadas (`incidents.read` / `incidents.write`)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/alerts/rules` | Reglas (`active`, `search`, paginación) |
+| POST | `/alerts/rules` | Crea una regla (201) |
+| PATCH | `/alerts/rules/{id}` | Modifica nombre, indicador, umbral, severidad, cooldown o correos |
+| DELETE | `/alerts/rules/{id}` | Elimina la regla solo si no generó alertas (204; 409 `rule_has_alerts`) |
+| GET | `/alerts` | Alertas paginadas (`status`, `severity`, `rule_id`, `search`) |
+| GET | `/alerts/metrics` | Valor actual de los 7 indicadores vigilados |
+| POST | `/alerts/evaluate` | Evalúa las reglas activas ahora y devuelve las alertas nuevas |
+| POST | `/alerts/{id}/acknowledge` | Reconoce una alerta abierta (`note` opcional) |
+| POST | `/alerts/{id}/resolve` | Resuelve una alerta abierta o reconocida (`note` opcional) |
+
+Indicadores: `open_tasks`, `overdue_tasks`, `open_incidents`, `active_reservations`,
+`pending_deliveries`, `low_stock_products` (productos cuyo stock total está bajo mínimo) y
+`stock_units`. Operadores: `gt`, `gte`, `lt`, `lte`. Severidades: `info`, `warning`, `critical`.
+Estados: `open`, `acknowledged`, `resolved`. Una regla con alerta sin resolver no duplica avisos;
+el cooldown evita repeticiones tras resolverla. Si la regla tiene `notify_emails` y SMTP está
+configurado, el correo sale al detectar la alerta; si no, la alerta persiste con
+`notification_error`. Transiciones inválidas devuelven 409 `invalid_transition`.
+
 Permiso `reports.export`. Cadencias `daily`, `weekly` (requiere `weekday` 0-6, 0 = lunes) y
 `monthly` (requiere `day_of_month` 1-28); `hour_utc` 0-23. Entre 1 y 20 destinatarios validados.
 Sin `SMTP_HOST`, `POST /run` responde 409 `smtp_not_configured` y no modifica la programación.

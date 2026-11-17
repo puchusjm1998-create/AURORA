@@ -36,6 +36,7 @@ IMPLEMENTED = [
     "Métricas Prometheus en /metrics: HTTP, latencias, base, almacenamiento y operación",
     "Informes programados por correo con historial de envío y ejecución desde cron",
     "Trazas OpenTelemetry de peticiones y SQL enmascaradas, con contexto W3C y X-Trace-ID",
+    "Alertas gestionadas: reglas sobre indicadores reales, cooldown, reconocimiento y resolución",
 ]
 
 PENDING = [
@@ -44,7 +45,6 @@ PENDING = [
     "Fase 6: calibración fina con plano real, tiempos medidos y turnos de trabajo",
     "Fase 7: tarjetas digitales NFC, planificación de turnos y bolsa de horas",
     "Fase 8: integración telefónica SIP/API, seguimiento GPS y firma de entrega",
-    "Fase 14: alertas gestionadas con reglas, reconocimiento y notificación",
 ]
 
 
@@ -57,7 +57,7 @@ def system_info() -> SystemInfo:
         demo_mode=settings.demo_mode,
         server_time_utc=utcnow().isoformat().replace("+00:00", "Z"),
         warehouse_timezone=settings.warehouse_timezone,
-        phase="Fases 1-3, fichaje, optimización y repartos: operación completa de almacén",
+        phase="Fases 1-3, 6-14: operación de almacén con observabilidad y alertas gestionadas",
         implemented=IMPLEMENTED,
         pending=PENDING,
     )

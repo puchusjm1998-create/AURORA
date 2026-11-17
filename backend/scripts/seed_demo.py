@@ -28,6 +28,9 @@ from sqlalchemy import select  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 from app.core.db import SessionLocal, engine  # noqa: E402
 from app.core.enums import (  # noqa: E402
+    AlertMetric,
+    AlertOperator,
+    AlertSeverity,
     AttendanceEventType,
     DeliveryStatus,
     IncidentSeverity,
@@ -46,6 +49,7 @@ from app.core.security import hash_password  # noqa: E402
 from app.core.timeutils import MADRID  # noqa: E402
 from app.db.triggers import install_immutability_triggers  # noqa: E402
 from app.models import (  # noqa: E402
+    AlertRule,
     AttendanceRecord,
     Delivery,
     DeliveryPallet,
@@ -715,6 +719,32 @@ def build(args: argparse.Namespace) -> None:
             created_by=supervisor.id,
         )
         db.add(schedule)
+        db.add_all(
+            [
+                AlertRule(
+                    name="Tareas abiertas elevadas",
+                    metric=AlertMetric.OPEN_TASKS,
+                    operator=AlertOperator.GTE,
+                    threshold=Decimal("3"),
+                    severity=AlertSeverity.WARNING,
+                    cooldown_minutes=120,
+                    notify_emails=["logistica@aurora.demo"],
+                    is_active=True,
+                    created_by=supervisor.id,
+                ),
+                AlertRule(
+                    name="Productos bajo mínimo en expansión",
+                    metric=AlertMetric.LOW_STOCK_PRODUCTS,
+                    operator=AlertOperator.GTE,
+                    threshold=Decimal("4"),
+                    severity=AlertSeverity.CRITICAL,
+                    cooldown_minutes=240,
+                    notify_emails=[],
+                    is_active=True,
+                    created_by=supervisor.id,
+                ),
+            ]
+        )
         db.commit()
 
         # -- Invoice reconciliation --------------------------------------

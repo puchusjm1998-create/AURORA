@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import csv
-import io
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query, Response
-from fastapi.responses import StreamingResponse
 from sqlalchemy import case, distinct, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -17,13 +14,17 @@ from app.core.db import get_db
 from app.core.enums import IncidentSeverity, IncidentStatus, PermissionCode
 from app.core.errors import ValidationError
 from app.core.timeutils import madrid_day_bounds_utc, utcnow
+from app.services.report_data import (
+    MOVEMENT_LABELS,
+    inventory_table,
+    movements_table,
+    table_csv_bytes,
+)
 from app.services.reports import (
-    ReportTable,
     attachment_headers,
     render_pdf,
     render_xlsx,
     select_columns,
-    table_as_csv_rows,
 )
 from app.services.reservations import expire_due
 from app.models import (
@@ -50,21 +51,6 @@ from app.schemas import (
 )
 
 router = APIRouter(tags=["Panel e informes"])
-
-MOVEMENT_LABELS = {
-    "reception": "Recepción",
-    "shipment": "Expedición",
-    "internal_move": "Movimiento interno",
-    "relocation": "Reubicación",
-    "picking": "Preparación",
-    "replenishment": "Reposición",
-    "putaway": "Estocaje",
-    "return": "Devolución",
-    "adjustment": "Ajuste",
-    "load": "Carga",
-    "unload": "Descarga",
-}
-
 
 @router.get("/dashboard", response_model=DashboardRead, summary="Panel de control")
 def dashboard(
@@ -368,159 +354,11 @@ def list_audit(
     return Page(items=items, total=total, limit=limit, offset=offset)
 
 
-INVENTORY_HEADERS = [
-    "SKU", "Producto", "Categoría", "Ud.", "Almacén", "Ubicación", "Palé",
-    "Físico", "Reservado", "Disponible", "Precio compra", "Precio venta",
-    "Valor", "Actualizado (UTC)",
-]
-INVENTORY_FORMATS = {7: "qty", 8: "qty", 9: "qty", 10: "money", 11: "money", 12: "money"}
-MOVEMENT_HEADERS = [
-    "Referencia", "Fecha (UTC)", "Tipo", "Estado", "SKU", "Producto",
-    "Cantidad", "Origen", "Destino", "Lote", "Motivo", "Documento",
-    "Confirmación física",
-]
-MOVEMENT_FORMATS = {6: "qty"}
-
-
-def _csv_response(filename: str, header: list[str], rows: list[list[str]]) -> StreamingResponse:
-    buffer = io.StringIO()
-    buffer.write("\ufeff")  # BOM so Excel opens UTF-8 correctly
-    writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
-    writer.writerow(header)
-    writer.writerows(rows)
-    content = buffer.getvalue()
-    return StreamingResponse(
-        iter([content]),
-        media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-def _inventory_table(db: Session, warehouse_id: str | None, only_positive: bool) -> ReportTable:
-    stmt = (
-        select(
-            Product.sku,
-            Product.name,
-            Product.category,
-            Product.uom,
-            Warehouse.code,
-            Location.full_code,
-            Pallet.code,
-            StockLevel.quantity,
-            StockLevel.reserved_quantity,
-            Product.purchase_price,
-            Product.unit_price,
-            StockLevel.updated_at,
-        )
-        .join(Product, Product.id == StockLevel.product_id)
-        .join(Location, Location.id == StockLevel.location_id)
-        .join(Warehouse, Warehouse.id == Location.warehouse_id)
-        .outerjoin(Pallet, Pallet.id == StockLevel.pallet_id)
-    )
-    if warehouse_id:
-        stmt = stmt.where(Warehouse.id == warehouse_id)
-    if only_positive:
-        stmt = stmt.where(StockLevel.quantity > 0)
-    rows = db.execute(stmt.order_by(Product.sku, Location.full_code)).all()
-
-    data: list[list] = []
-    total_qty = total_reserved = total_available = total_value = Decimal("0")
-    warehouse_label = "Todos"
-    for sku, name, category, uom, warehouse, location, pallet, qty, reserved, purchase, price, updated in rows:
-        quantity = Decimal(str(qty))
-        reserved_qty = Decimal(str(reserved))
-        available = quantity - reserved_qty
-        value = quantity * Decimal(str(purchase))
-        total_qty += quantity
-        total_reserved += reserved_qty
-        total_available += available
-        total_value += value
-        data.append(
-            [
-                sku, name, category, uom, warehouse, location, pallet or "",
-                quantity, reserved_qty, available,
-                Decimal(str(purchase)), Decimal(str(price)), value, updated,
-            ]
-        )
-    if warehouse_id:
-        warehouse_label = rows[0][4] if rows else warehouse_id
-    return ReportTable(
-        title="Informe de inventario",
-        subtitle="Existencias físicas, reservadas y disponibles valoradas a precio de compra.",
-        headers=INVENTORY_HEADERS,
-        rows=data,
-        formats=INVENTORY_FORMATS,
-        totals=[
-            "Total", "", "", "", "", "", "",
-            total_qty, total_reserved, total_available, "", "", total_value, "",
-        ],
-        meta=[
-            ("Almacén", warehouse_label if warehouse_id else "Todos"),
-            ("Solo existencias positivas", "Sí" if only_positive else "No"),
-        ],
-        sheet_name="Inventario",
-    )
-
-
-def _movements_table(
-    db: Session, date_from: datetime | None, date_to: datetime | None
-) -> ReportTable:
-    stmt = (
-        select(
-            StockMovement.reference,
-            StockMovement.created_at,
-            StockMovement.movement_type,
-            StockMovement.status,
-            Product.sku,
-            Product.name,
-            StockMovement.quantity,
-            StockMovement.from_location_id,
-            StockMovement.to_location_id,
-            StockMovement.batch_code,
-            StockMovement.reason,
-            StockMovement.document_ref,
-            StockMovement.physical_confirmed,
-        )
-        .join(Product, Product.id == StockMovement.product_id)
-    )
-    if date_from:
-        stmt = stmt.where(StockMovement.created_at >= date_from)
-    if date_to:
-        stmt = stmt.where(StockMovement.created_at <= date_to)
-    rows = db.execute(stmt.order_by(StockMovement.created_at.desc())).all()
-
-    location_codes = {loc.id: loc.full_code for loc in db.scalars(select(Location)).all()}
-    data = [
-        [
-            reference,
-            created,
-            MOVEMENT_LABELS.get(mtype, str(mtype)),
-            str(status),
-            sku,
-            name,
-            Decimal(str(qty)),
-            location_codes.get(from_id, ""),
-            location_codes.get(to_id, ""),
-            batch or "",
-            reason or "",
-            document_ref or "",
-            "Sí" if confirmed else "No",
-        ]
-        for reference, created, mtype, status, sku, name, qty, from_id, to_id, batch, reason, document_ref, confirmed in rows
-    ]
-    period = "Sin límite"
-    if date_from or date_to:
-        start = date_from.strftime("%d/%m/%Y") if date_from else "inicio"
-        finish = date_to.strftime("%d/%m/%Y") if date_to else "hoy"
-        period = f"{start} – {finish}"
-    return ReportTable(
-        title="Libro de movimientos",
-        subtitle="Entradas, salidas, movimientos internos y ajustes confirmados.",
-        headers=MOVEMENT_HEADERS,
-        rows=data,
-        formats=MOVEMENT_FORMATS,
-        meta=[("Periodo", period)],
-        sheet_name="Movimientos",
+def _report_response(filename: str, media_type: str, content: bytes) -> Response:
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers=attachment_headers(filename),
     )
 
 
@@ -530,12 +368,12 @@ def inventory_report(
     _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
     warehouse_id: str | None = None,
     only_positive: bool = True,
-) -> StreamingResponse:
-    table = _inventory_table(db, warehouse_id, only_positive)
-    return _csv_response(
+) -> Response:
+    table = inventory_table(db, warehouse_id, only_positive)
+    return _report_response(
         f"aurora-inventario-{date.today().isoformat()}.csv",
-        table.headers,
-        table_as_csv_rows(table),
+        "text/csv; charset=utf-8",
+        table_csv_bytes(table),
     )
 
 
@@ -546,11 +384,11 @@ def inventory_pdf(
     warehouse_id: str | None = None,
     only_positive: bool = True,
 ) -> Response:
-    table = select_columns(_inventory_table(db, warehouse_id, only_positive), [0, 1, 4, 5, 7, 8, 9, 12])
-    return Response(
-        content=render_pdf(table),
-        media_type="application/pdf",
-        headers=attachment_headers(f"aurora-inventario-{date.today().isoformat()}.pdf"),
+    table = select_columns(inventory_table(db, warehouse_id, only_positive), [0, 1, 4, 5, 7, 8, 9, 12])
+    return _report_response(
+        f"aurora-inventario-{date.today().isoformat()}.pdf",
+        "application/pdf",
+        render_pdf(table),
     )
 
 
@@ -561,11 +399,11 @@ def inventory_xlsx(
     warehouse_id: str | None = None,
     only_positive: bool = True,
 ) -> Response:
-    table = _inventory_table(db, warehouse_id, only_positive)
-    return Response(
-        content=render_xlsx(table),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers=attachment_headers(f"aurora-inventario-{date.today().isoformat()}.xlsx"),
+    table = inventory_table(db, warehouse_id, only_positive)
+    return _report_response(
+        f"aurora-inventario-{date.today().isoformat()}.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        render_xlsx(table),
     )
 
 
@@ -575,12 +413,12 @@ def movements_report(
     _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
     date_from: datetime | None = None,
     date_to: datetime | None = None,
-) -> StreamingResponse:
-    table = _movements_table(db, date_from, date_to)
-    return _csv_response(
+) -> Response:
+    table = movements_table(db, date_from, date_to)
+    return _report_response(
         f"aurora-movimientos-{date.today().isoformat()}.csv",
-        table.headers,
-        table_as_csv_rows(table),
+        "text/csv; charset=utf-8",
+        table_csv_bytes(table),
     )
 
 
@@ -591,11 +429,11 @@ def movements_pdf(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ) -> Response:
-    table = select_columns(_movements_table(db, date_from, date_to), [0, 1, 2, 4, 5, 6, 7, 8, 12])
-    return Response(
-        content=render_pdf(table),
-        media_type="application/pdf",
-        headers=attachment_headers(f"aurora-movimientos-{date.today().isoformat()}.pdf"),
+    table = select_columns(movements_table(db, date_from, date_to), [0, 1, 2, 4, 5, 6, 7, 8, 12])
+    return _report_response(
+        f"aurora-movimientos-{date.today().isoformat()}.pdf",
+        "application/pdf",
+        render_pdf(table),
     )
 
 
@@ -606,11 +444,11 @@ def movements_xlsx(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ) -> Response:
-    table = _movements_table(db, date_from, date_to)
-    return Response(
-        content=render_xlsx(table),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers=attachment_headers(f"aurora-movimientos-{date.today().isoformat()}.xlsx"),
+    table = movements_table(db, date_from, date_to)
+    return _report_response(
+        f"aurora-movimientos-{date.today().isoformat()}.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        render_xlsx(table),
     )
 
 

@@ -54,6 +54,20 @@ class Settings(BaseSettings):
     storage_dir: Path = BACKEND_DIR / "data" / "storage"
     max_upload_mb: int = 25
 
+    # --- Correo saliente (informes programados) -----------------------------
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "aurora@localhost"
+    smtp_starttls: bool = True
+    smtp_ssl: bool = False
+    smtp_timeout: float = 15.0
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.smtp_host.strip())
+
     # --- Domain -------------------------------------------------------------
     warehouse_timezone: str = "Europe/Madrid"
     # Acepta DEMO_MODE y AURORA_DEMO_MODE para no romper despliegues previos.

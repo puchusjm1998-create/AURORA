@@ -302,3 +302,24 @@ reglas de Prometheus listas para copiar, no como una simulación dentro de la ap
 **Límites.** El registro es en memoria y por proceso: con varios workers de uvicorn cada uno expone
 sus propias series (documentado; en Docker se usa un worker). No hay trazas OpenTelemetry ni
 alertas gestionadas por AURORA; ambas cosas siguen en `/sistema` como pendientes.
+
+---
+
+## D-30 · Informes programados con planificador externo y SMTP propio
+
+**Decisión.** La programación vive en la base de datos (`report_schedules`) y la ejecuta un proceso
+aparte (`scripts/send_scheduled_reports.py`) pensado para cron o systemd timer, no un hilo dentro
+del servidor web. Cada envío genera el informe en el momento con los mismos datos que las descargas
+manuales, lo adjunta a un correo SMTP y deja `last_run_at`, `last_status`, `last_error` y la nueva
+`next_run_at` en la fila. El envío manual desde la interfaz (`POST /run`) no altera la cadencia.
+Sin `SMTP_HOST` no se envía ni se avanza nada: la API responde 409 `smtp_not_configured`.
+
+**Por qué.** Un planificador externo sobrevive a reinicios, no compite con varios workers y es
+fácil de operar y alertar (el script sale con código 1 si algún envío falla). Separar generación y
+transporte permite probar el flujo completo con un servidor SMTP local real, sin servicios de
+terceros. Los destinatarios y el contenido quedan en auditoría.
+
+**Límites.** El correo se envía en claro salvo STARTTLS/SSL; no hay rebotes ni seguimiento de
+apertura, ni plantillas corporativas configurables. La hora se guarda en UTC y el frontend la
+muestra tal cual (se indica Europe/Madrid en la ayuda). Las alertas basadas en fallos de envío
+dependen del orquestador (código de salida del script).

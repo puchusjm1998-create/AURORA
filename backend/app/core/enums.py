@@ -215,3 +215,24 @@ ROLE_DEFINITIONS: dict[int, tuple[str, str]] = {
     4: ("Trabajador", "Consulta de tareas, escaneo QR y confirmación de operaciones"),
     5: ("Auditor", "Consulta autorizada e historial de auditoría"),
 }
+
+class ReportKind(StrEnum):
+    INVENTORY = "inventory"
+    MOVEMENTS = "movements"
+
+
+class ReportFormat(StrEnum):
+    PDF = "pdf"
+    XLSX = "xlsx"
+    CSV = "csv"
+
+
+class ScheduleFrequency(StrEnum):
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+
+
+class ScheduleRunStatus(StrEnum):
+    SENT = "sent"
+    FAILED = "failed"

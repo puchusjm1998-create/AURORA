@@ -34,6 +34,7 @@ IMPLEMENTED = [
     "Copias de seguridad con manifiesto SHA-256, restauración, humo y carga medidos",
     "Informes nativos en PDF paginado y Excel con resumen, filtros y totales",
     "Métricas Prometheus en /metrics: HTTP, latencias, base, almacenamiento y operación",
+    "Informes programados por correo con historial de envío y ejecución desde cron",
 ]
 
 PENDING = [
@@ -42,7 +43,7 @@ PENDING = [
     "Fase 6: calibración fina con plano real, tiempos medidos y turnos de trabajo",
     "Fase 7: tarjetas digitales NFC, planificación de turnos y bolsa de horas",
     "Fase 8: integración telefónica SIP/API, seguimiento GPS y firma de entrega",
-    "Fase 11: trazas OpenTelemetry, alertas gestionadas y envío programado de informes",
+    "Fase 13: trazas distribuidas OpenTelemetry y alertas gestionadas en la aplicación",
 ]
 
 

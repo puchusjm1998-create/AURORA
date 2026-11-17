@@ -17,6 +17,7 @@ import {
   useToast,
 } from "@/components/ui";
 import { IconDownload, IconReports, IconRefresh } from "@/components/icons";
+import { ReportSchedules } from "@/components/ReportSchedules";
 
 export default function ReportsPage() {
   const { can } = useAuth();
@@ -210,6 +211,8 @@ export default function ReportsPage() {
               </div>
             </div>
           </div>
+
+          <ReportSchedules />
 
           <Card title="Cobertura de informes" subtitle="Qué se puede descargar hoy y qué queda pendiente">
             <div className="grid grid-3">

@@ -42,6 +42,8 @@ CHECKS: list[tuple[str, str, str, tuple[int, ...]]] = [
     ("Informe Excel de inventario", "GET", "/api/v1/reports/inventory.xlsx", (200,)),
     ("Informe PDF de movimientos", "GET", "/api/v1/reports/movements.pdf", (200,)),
     ("Informe Excel de movimientos", "GET", "/api/v1/reports/movements.xlsx", (200,)),
+    ("Programaciones de informes", "GET", "/api/v1/report-schedules?limit=5", (200,)),
+    ("Estado del correo saliente", "GET", "/api/v1/report-schedules/config", (200,)),
     ("Frontend: informes", "GET", "/informes/", (200,)),
     ("Frontend: panel", "GET", "/", (200,)),
     ("Frontend: repartos", "GET", "/repartos/", (200,)),

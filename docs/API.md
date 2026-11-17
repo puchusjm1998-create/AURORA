@@ -357,6 +357,23 @@ desactivar la propia cuenta.
 | GET | `/reports/movements.pdf` | Movimientos en PDF paginado (máximo 4.000 filas maquetadas) |
 | GET | `/reports/movements.xlsx` | Movimientos en Excel nativo, fechas y cantidades numéricas |
 
+### Informes programados
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/report-schedules` | Lista paginada (`active`, `search`, `limit`, `offset`) |
+| POST | `/report-schedules` | Crea una programación (201) |
+| PATCH | `/report-schedules/{id}` | Modifica nombre, informe, formato, cadencia, hora, destinatarios o estado |
+| DELETE | `/report-schedules/{id}` | Elimina la programación (204) |
+| POST | `/report-schedules/{id}/run` | Genera y envía ahora; no altera el próximo envío |
+| GET | `/report-schedules/config` | Estado de SMTP, programaciones activas y vencidas |
+
+Permiso `reports.export`. Cadencias `daily`, `weekly` (requiere `weekday` 0-6, 0 = lunes) y
+`monthly` (requiere `day_of_month` 1-28); `hour_utc` 0-23. Entre 1 y 20 destinatarios validados.
+Sin `SMTP_HOST`, `POST /run` responde 409 `smtp_not_configured` y no modifica la programación.
+El planificador `scripts/send_scheduled_reports.py` envía los vencidos, registra el resultado y
+avanza la fecha; si un envío falla, guarda `last_error`, avanza la cadencia y continúa con el resto.
+
 Los informes PDF y Excel exigen `reports.export` igual que el CSV. Si el PDF supera 4.000 filas,
 el subtítulo lo indica y remite al Excel/CSV para el detalle completo; nunca se recorta en silencio.
 El Excel incluye hoja `Resumen` con fecha de generación, filtros y número de filas.

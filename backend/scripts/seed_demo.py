@@ -35,6 +35,9 @@ from app.core.enums import (  # noqa: E402
     IncidentType,
     MovementType,
     PalletStatus,
+    ReportFormat,
+    ReportKind,
+    ScheduleFrequency,
     TaskStatus,
     TrackingMode,
 )
@@ -57,11 +60,13 @@ from app.models import (  # noqa: E402
     Role,
     StockMovement,
     Supplier,
+    ReportSchedule,
     Task,
     User,
     Vehicle,
     Warehouse,
 )
+from app.services.report_delivery import next_occurrence  # noqa: E402
 from app.services.sequences import next_code  # noqa: E402
 from app.services.stock import StockEngine  # noqa: E402
 
@@ -696,6 +701,20 @@ def build(args: argparse.Namespace) -> None:
                 DeliveryPallet(delivery_id=delivery_b.id, pallet_id=pallet_b.id),
             ]
         )
+        schedule = ReportSchedule(
+            name="Inventario diario de compras",
+            report_kind=ReportKind.INVENTORY,
+            report_format=ReportFormat.PDF,
+            frequency=ScheduleFrequency.DAILY,
+            hour_utc=6,
+            recipients=["compras@aurora.demo", "direccion@aurora.demo"],
+            is_active=True,
+            next_run_at=next_occurrence(
+                ScheduleFrequency.DAILY, 6, None, None, after=datetime.now(timezone.utc)
+            ),
+            created_by=supervisor.id,
+        )
+        db.add(schedule)
         db.commit()
 
         # -- Invoice reconciliation --------------------------------------
@@ -731,7 +750,7 @@ def build(args: argparse.Namespace) -> None:
         print(f"Almacén: {warehouse.code} · {warehouse.name}")
         print(
             f"Ubicaciones: {len(locations)} · Productos: {len(products)} · Palés: 4"
-            f" · Tareas: {len(task_specs)} · Incidencias: {len(incident_specs)} · Fichajes: 24 · Repartos: 2"
+            f" · Tareas: {len(task_specs)} · Incidencias: {len(incident_specs)} · Fichajes: 24 · Repartos: 2 · Programaciones: 1"
         )
         print("Cuentas (contraseña única de demo):", DEMO_PASSWORD)
         for label, email in [

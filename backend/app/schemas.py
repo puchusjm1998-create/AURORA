@@ -10,7 +10,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Generic, Literal, Optional, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator, model_validator
 
 from app.core.enums import (
     AttendanceEventType,
@@ -23,7 +23,11 @@ from app.core.enums import (
     MovementStatus,
     MovementType,
     PalletStatus,
+    ReportFormat,
+    ReportKind,
     ReservationStatus,
+    ScheduleFrequency,
+    ScheduleRunStatus,
     TaskStatus,
     TrackingMode,
     UnitStatus,
@@ -990,3 +994,99 @@ class ScanResult(BaseModel):
     target_id: Optional[str] = None
     href: str
     extra: dict[str, Any] = {}
+
+
+EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
+
+class ReportScheduleCreate(BaseModel):
+    name: str = Field(min_length=3, max_length=120)
+    report_kind: ReportKind
+    report_format: ReportFormat = ReportFormat.PDF
+    frequency: ScheduleFrequency
+    weekday: Optional[int] = Field(default=None, ge=0, le=6)
+    day_of_month: Optional[int] = Field(default=None, ge=1, le=28)
+    hour_utc: int = Field(default=6, ge=0, le=23)
+    recipients: list[str] = Field(min_length=1, max_length=20)
+    is_active: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def _clean_name(cls, value: str) -> str:
+        value = " ".join(value.split())
+        if len(value) < 3:
+            raise ValueError("El nombre debe tener al menos 3 caracteres")
+        return value
+
+    @field_validator("recipients")
+    @classmethod
+    def _check_recipients(cls, value: list[str]) -> list[str]:
+        import re
+
+        cleaned: list[str] = []
+        for recipient in value:
+            candidate = recipient.strip()
+            if not re.match(EMAIL_PATTERN, candidate):
+                raise ValueError(f"Correo no válido: {recipient}")
+            if candidate.lower() not in [item.lower() for item in cleaned]:
+                cleaned.append(candidate)
+        if not cleaned:
+            raise ValueError("Indique al menos un destinatario")
+        return cleaned
+
+    @model_validator(mode="after")
+    def _check_frequency(self) -> "ReportScheduleCreate":
+        if self.frequency == ScheduleFrequency.WEEKLY and self.weekday is None:
+            raise ValueError("La programación semanal requiere weekday (0 = lunes)")
+        if self.frequency == ScheduleFrequency.MONTHLY and self.day_of_month is None:
+            raise ValueError("La programación mensual requiere day_of_month")
+        return self
+
+
+class ReportScheduleUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=3, max_length=120)
+    report_kind: Optional[ReportKind] = None
+    report_format: Optional[ReportFormat] = None
+    frequency: Optional[ScheduleFrequency] = None
+    weekday: Optional[int] = Field(default=None, ge=0, le=6)
+    day_of_month: Optional[int] = Field(default=None, ge=1, le=28)
+    hour_utc: Optional[int] = Field(default=None, ge=0, le=23)
+    recipients: Optional[list[str]] = Field(default=None, min_length=1, max_length=20)
+    is_active: Optional[bool] = None
+
+
+class ReportScheduleRead(ORMBase):
+    name: str
+    report_kind: ReportKind
+    report_format: ReportFormat
+    frequency: ScheduleFrequency
+    weekday: Optional[int] = None
+    day_of_month: Optional[int] = None
+    hour_utc: int
+    recipients: list[str]
+    is_active: bool
+    next_run_at: Optional[UtcDateTime] = None
+    last_run_at: Optional[UtcDateTime] = None
+    last_status: Optional[ScheduleRunStatus] = None
+    last_error: str = ""
+    created_by: Optional[str] = None
+    creator_name: Optional[str] = None
+    created_at: UtcDateTime
+    updated_at: UtcDateTime
+
+
+class ReportScheduleConfig(BaseModel):
+    configured: bool
+    host: Optional[str] = None
+    port: Optional[int] = None
+    from_address: Optional[str] = None
+    starttls: bool = True
+    ssl: bool = False
+    due: int = 0
+    active: int = 0
+
+
+class ReportScheduleRun(BaseModel):
+    status: str
+    message_id: Optional[str] = None
+    detail: str = ""

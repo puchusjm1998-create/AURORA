@@ -656,3 +656,44 @@ export interface ValuationSummary {
     sale_value: string;
   }[];
 }
+
+export type ReportScheduleFrequency = "daily" | "weekly" | "monthly";
+export type ReportScheduleStatus = "sent" | "failed";
+
+export interface ReportSchedule {
+  id: string;
+  name: string;
+  report_kind: "inventory" | "movements";
+  report_format: "pdf" | "xlsx" | "csv";
+  frequency: ReportScheduleFrequency;
+  weekday: number | null;
+  day_of_month: number | null;
+  hour_utc: number;
+  recipients: string[];
+  is_active: boolean;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  last_status: ReportScheduleStatus | null;
+  last_error: string;
+  created_by: string | null;
+  creator_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReportScheduleConfig {
+  configured: boolean;
+  host: string | null;
+  port: number | null;
+  from_address: string | null;
+  starttls: boolean;
+  ssl: boolean;
+  due: number;
+  active: number;
+}
+
+export interface ReportScheduleRun {
+  status: string;
+  message_id: string | null;
+  detail: string;
+}

@@ -122,6 +122,10 @@ WantedBy=multi-user.target
 | `AURORA_ADMIN_EMAIL/PASSWORD/NAME` | Primer arranque | Cuenta administradora inicial |
 | `DEMO_MODE` | No | Marca la interfaz como demostración; nunca en producción |
 | `METRICS_TOKEN` | No | Si se define, `/metrics` exige `Authorization: Bearer <token>` |
+| `SMTP_HOST/PORT` | Para informes | Servidor de correo saliente (por defecto 587) |
+| `SMTP_USER/PASSWORD` | No | Autenticación SMTP si el servidor la exige |
+| `SMTP_FROM` | Para informes | Remitente de los informes programados |
+| `SMTP_STARTTLS` / `SMTP_SSL` | No | STARTTLS activo por defecto; `SMTP_SSL=true` para puerto 465 |
 | `STORAGE_DIR` | No | Ruta de documentos originales (volumen persistente) |
 | `MAX_UPLOAD_MB` | No | Tamaño máximo por factura (25 por defecto) |
 | `WAREHOUSE_TIMEZONE` | No | `Europe/Madrid` |
@@ -316,6 +320,39 @@ groups:
 arranca un único worker de uvicorn; si escala horizontalmente, cada réplica expone sus propias
 series y Prometheus debe rasparlas todas (no sume histogramas entre réplicas sin agregar `le`).
 No hay trazas OpenTelemetry todavía.
+
+### Informes programados por correo
+
+Defina `SMTP_HOST`, `SMTP_FROM` y, si procede, credenciales. Sin host, la interfaz muestra la
+programación como no configurada y la API rechaza el envío manual con 409.
+
+El envío lo dispara un proceso externo (no un hilo del servidor web). Ejecútelo cada 5–10 minutos:
+
+```cron
+*/10 * * * * cd /opt/aurora/backend && ../.venv/bin/python -m scripts.send_scheduled_reports >> /var/log/aurora-reports.log 2>&1
+```
+
+Con Docker:
+
+```bash
+docker compose exec -T api python -m scripts.send_scheduled_reports
+```
+
+Compruebe antes qué está vencido y si SMTP responde:
+
+```bash
+cd backend
+../.venv/bin/python -m scripts.send_scheduled_reports --dry-run
+```
+
+El script sale con código 2 si no hay SMTP configurado (sin tocar las programaciones), con 1 si
+algún envío falla y con 0 si todo va bien; use ese código para alertar. Cada ejecución actualiza
+`last_run_at`, `last_status`, `last_error` y `next_run_at`, y deja auditoría
+`report_schedule.sent/failed`. El envío manual desde `/informes` no cambia la cadencia.
+
+Prueba recomendada antes de producción: cree una programación con su propia cuenta, pulse
+**Enviar** y confirme que el adjunto (PDF/Excel/CSV) llega y abre correctamente. El flujo completo
+está cubierto por pruebas automatizadas contra un servidor SMTP local.
 
 ### Prueba de humo y carga tras cada despliegue
 

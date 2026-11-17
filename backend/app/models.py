@@ -52,7 +52,11 @@ from app.core.enums import (
     MovementType,
     OCRStatus,
     PalletStatus,
+    ReportFormat,
+    ReportKind,
     ReservationStatus,
+    ScheduleFrequency,
+    ScheduleRunStatus,
     TaskStatus,
     TrackingMode,
     UnitStatus,
@@ -831,3 +835,39 @@ class CallRecord(Base):
     ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     result: Mapped[str] = mapped_column(Text, default="", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class ReportSchedule(Base, TimestampMixin):
+    """Programación de un informe recurrente enviado por correo."""
+
+    __tablename__ = "report_schedules"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    report_kind: Mapped[ReportKind] = mapped_column(
+        enum_column(ReportKind, "report_kind"), nullable=False
+    )
+    report_format: Mapped[ReportFormat] = mapped_column(
+        enum_column(ReportFormat, "report_format"), default=ReportFormat.PDF, nullable=False
+    )
+    frequency: Mapped[ScheduleFrequency] = mapped_column(
+        enum_column(ScheduleFrequency, "schedule_frequency"), nullable=False
+    )
+    weekday: Mapped[Optional[int]] = mapped_column(Integer)  # 0 = lunes
+    day_of_month: Mapped[Optional[int]] = mapped_column(Integer)
+    hour_utc: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+    recipients: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    next_run_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
+    last_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_status: Mapped[Optional[ScheduleRunStatus]] = mapped_column(
+        enum_column(ScheduleRunStatus, "schedule_run_status")
+    )
+    last_error: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_by: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+
+    creator: Mapped[Optional["User"]] = relationship(foreign_keys=[created_by], lazy="joined")

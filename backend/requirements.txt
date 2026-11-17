@@ -1,0 +1,21 @@
+# AURORA LOGISTICS AI — dependencias del backend (Fase 1)
+fastapi==0.163.1
+uvicorn[standard]==0.54.0
+SQLAlchemy==2.1.9
+alembic==1.20.1
+pydantic==2.14.3
+pydantic-settings==2.16.3
+PyJWT==2.15.1
+bcrypt==5.0.0
+qrcode==8.2
+pillow==13.0.0
+python-multipart==0.0.34
+python-dateutil==4.0.0
+
+# Producción: PostgreSQL. El README explica cómo activarlo con DATABASE_URL.
+psycopg[binary]>=3.2,<4
+
+# Pruebas
+pytest==9.2.0
+pytest-cov==7.1.0
+httpx==0.28.1

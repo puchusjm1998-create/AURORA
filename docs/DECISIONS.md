@@ -677,4 +677,6 @@ discrepen.
 debe ejecutarse en una ventana de baja actividad y el tar resultante ocupa lo mismo que los
 documentos. No se copia el modelo Piper ni la caché (reconstruibles). La migración no borra los
 originales locales y no reescribe URLs: si un objeto se borra del bucket, la copia local no se usa
-automáticamente. Los informes de incidencias y auditoría siguen siendo solo de pantalla.
+automáticamente. Los informes cubren inventario, movimientos, facturación, repartos, plantilla, incidencias y
+auditoría; la auditoría se acota a 20.000 filas por exportación y el PDF omite los JSON de cambios
+para seguir siendo legible.

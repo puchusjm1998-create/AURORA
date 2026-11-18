@@ -5,6 +5,7 @@ from __future__ import annotations
 import hmac
 import logging
 import os
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, Request, Response
@@ -16,9 +17,12 @@ from app.core.db import SessionLocal
 from app.core.enums import IncidentStatus, ReservationStatus, TaskStatus
 from app.core.tracing import tracing_status
 from app.models import Delivery, Incident, Pallet, StockLevel, StockReservation, Task
+from app.services import s3 as s3_storage
 
 logger = logging.getLogger("aurora.metrics")
 settings = get_settings()
+_STORAGE_CACHE: tuple[float, tuple[int, int]] = (0.0, (0, 0))
+_STORAGE_TTL = 60.0
 
 router = APIRouter(tags=["Observabilidad"])
 
@@ -33,6 +37,25 @@ def _authorized(request: Request) -> bool:
     header = request.headers.get("authorization", "")
     token = header[7:].strip() if header.lower().startswith("bearer ") else ""
     return bool(token) and hmac.compare_digest(token, expected)
+
+
+def storage_metrics() -> tuple[int, int]:
+    """(bytes, ficheros) del backend activo, con caché de 60 s para S3."""
+    global _STORAGE_CACHE
+    if settings.storage_backend.strip().lower() != "s3":
+        return storage_usage(Path(settings.storage_dir))
+    now = time.monotonic()
+    cached_at, cached = _STORAGE_CACHE
+    if cached_at and now - cached_at < _STORAGE_TTL:
+        return cached
+    try:
+        objects = s3_storage.iter_objects()
+        value = (sum(size for _key, size in objects), len(objects))
+    except Exception:  # noqa: BLE001 - S3 caído no debe tumbar /metrics
+        logger.warning("No se pudo medir el bucket S3", exc_info=True)
+        return cached
+    _STORAGE_CACHE = (now, value)
+    return value
 
 
 def storage_usage(path: Path) -> tuple[int, int]:
@@ -108,12 +131,12 @@ def business_gauges() -> list[tuple[str, str, list[tuple[dict[str, str], float]]
         database_up = 0.0
         logger.warning("No se pudieron calcular los gauges de negocio", exc_info=True)
 
-    storage_bytes, storage_files = storage_usage(Path(settings.storage_dir))
+    storage_bytes, storage_files = storage_metrics()
     gauges += [
         ("aurora_database_up", "1 si la base de datos respondió a SELECT 1.", [({}, database_up)]),
-        ("aurora_storage_bytes", "Tamaño del volumen de documentos en bytes.",
+        ("aurora_storage_bytes", "Tamaño de documentos (disco local o bucket S3) en bytes.",
          [({}, float(storage_bytes))]),
-        ("aurora_storage_files", "Número de ficheros en el volumen de documentos.",
+        ("aurora_storage_files", "Número de documentos (disco local o bucket S3).",
          [({}, float(storage_files))]),
         ("aurora_metrics_protected", "1 si /metrics exige token Bearer.", [({}, 0.0 if not settings.metrics_token else 1.0)]),
         ("aurora_tracing_enabled", "1 si las trazas OpenTelemetry están activas.", [({}, 1.0 if tracing_status()["active"] else 0.0)]),

@@ -458,3 +458,187 @@ def _period_label(
     start = date_from.strftime("%d/%m/%Y") if date_from else "inicio"
     finish = date_to.strftime("%d/%m/%Y") if date_to else "hoy"
     return f"{start} – {finish}"
+
+
+INCIDENT_HEADERS = [
+    "Código", "Título", "Tipo", "Severidad", "Estado", "Almacén", "Ubicación",
+    "SKU", "Producto", "Palé", "Responsable", "Reportado por", "Creado",
+    "Resuelto", "Resolución",
+]
+INCIDENT_LABELS = {
+    "damage": "Daño",
+    "discrepancy": "Discrepancia",
+    "quality": "Calidad",
+    "safety": "Seguridad",
+    "other": "Otro",
+}
+SEVERITY_LABELS = {
+    "low": "Baja",
+    "medium": "Media",
+    "high": "Alta",
+    "critical": "Crítica",
+}
+INCIDENT_STATUS_LABELS = {
+    "open": "Abierta",
+    "acknowledged": "Reconocida",
+    "resolved": "Resuelta",
+    "closed": "Cerrada",
+}
+
+AUDIT_HEADERS = [
+    "Fecha (UTC)", "Actor", "Acción", "Entidad", "ID entidad", "IP",
+    "Antes", "Después", "User-Agent",
+]
+
+
+def incidents_table(
+    db: Session,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    status: str | None = None,
+    severity: str | None = None,
+    limit: int = 5000,
+) -> ReportTable:
+    from app.models import Employee, Incident, Pallet, Product, User, Warehouse
+
+    stmt = (
+        select(
+            Incident.code,
+            Incident.title,
+            Incident.incident_type,
+            Incident.severity,
+            Incident.status,
+            Warehouse.code,
+            Location.full_code,
+            Product.sku,
+            Product.name,
+            Pallet.code,
+            Employee.first_name,
+            Employee.last_name,
+            User.full_name,
+            Incident.created_at,
+            Incident.resolved_at,
+            Incident.resolution,
+        )
+        .outerjoin(Location, Location.id == Incident.location_id)
+        .outerjoin(Warehouse, Warehouse.id == Location.warehouse_id)
+        .outerjoin(Product, Product.id == Incident.product_id)
+        .outerjoin(Pallet, Pallet.id == Incident.pallet_id)
+        .outerjoin(Employee, Employee.id == Incident.assigned_to)
+        .outerjoin(User, User.id == Incident.reported_by)
+    )
+    if date_from:
+        stmt = stmt.where(Incident.created_at >= date_from)
+    if date_to:
+        stmt = stmt.where(Incident.created_at <= date_to)
+    if status:
+        stmt = stmt.where(Incident.status == status)
+    if severity:
+        stmt = stmt.where(Incident.severity == severity)
+    rows = db.execute(
+        stmt.order_by(Incident.created_at.desc()).limit(limit)
+    ).all()
+    data = [
+        [
+            code,
+            title,
+            INCIDENT_LABELS.get(str(kind), str(kind)),
+            SEVERITY_LABELS.get(str(level), str(level)),
+            INCIDENT_STATUS_LABELS.get(str(state), str(state)),
+            warehouse or "",
+            location or "",
+            sku or "",
+            product or "",
+            pallet or "",
+            " ".join(part for part in (first, last) if part) or "",
+            reporter or "",
+            created,
+            resolved or "",
+            (resolution or "")[:4000],
+        ]
+        for (
+            code, title, kind, level, state, warehouse, location, sku, product,
+            pallet, first, last, reporter, created, resolved, resolution,
+        ) in rows
+    ]
+    return ReportTable(
+        title="Incidencias de almacén",
+        subtitle="Reporte, severidad, responsable, resolución y tiempos de cierre.",
+        headers=INCIDENT_HEADERS,
+        rows=data,
+        meta=[
+            ("Periodo de creación", _period_label(date_from, date_to)),
+            ("Estado", INCIDENT_STATUS_LABELS.get(status or "", "Todos")),
+            ("Severidad", SEVERITY_LABELS.get(severity or "", "Todas")),
+            ("Incidencias", str(len(data))),
+        ],
+        sheet_name="Incidencias",
+    )
+
+
+def audit_table(
+    db: Session,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    action: str | None = None,
+    entity_type: str | None = None,
+    actor: str | None = None,
+    limit: int = 5000,
+) -> ReportTable:
+    import json
+
+    from app.models import AuditLog
+
+    stmt = select(
+        AuditLog.created_at,
+        AuditLog.actor_label,
+        AuditLog.action,
+        AuditLog.entity_type,
+        AuditLog.entity_id,
+        AuditLog.ip,
+        AuditLog.before,
+        AuditLog.after,
+        AuditLog.user_agent,
+    )
+    if date_from:
+        stmt = stmt.where(AuditLog.created_at >= date_from)
+    if date_to:
+        stmt = stmt.where(AuditLog.created_at <= date_to)
+    if action:
+        stmt = stmt.where(AuditLog.action.ilike(f"%{action}%"))
+    if entity_type:
+        stmt = stmt.where(AuditLog.entity_type == entity_type)
+    if actor:
+        stmt = stmt.where(AuditLog.actor_label.ilike(f"%{actor}%"))
+    rows = db.execute(
+        stmt.order_by(AuditLog.created_at.desc()).limit(limit)
+    ).all()
+    data = [
+        [
+            created,
+            actor_label,
+            action,
+            entity_type,
+            entity_id or "",
+            ip or "",
+            json.dumps(before, ensure_ascii=False, default=str) if before else "",
+            json.dumps(after, ensure_ascii=False, default=str) if after else "",
+            user_agent or "",
+        ]
+        for created, actor_label, action, entity_type, entity_id, ip, before, after, user_agent in rows
+    ]
+    return ReportTable(
+        title="Auditoría inmutable",
+        subtitle="Registro append-only de acciones, actor, entidad y cambios.",
+        headers=AUDIT_HEADERS,
+        rows=data,
+        meta=[
+            ("Periodo", _period_label(date_from, date_to)),
+            ("Acción", action or "Todas"),
+            ("Entidad", entity_type or "Todas"),
+            ("Actor", actor or "Todos"),
+            ("Filas (máximo)", str(limit)),
+            ("Registros", str(len(data))),
+        ],
+        sheet_name="Auditoría",
+    )

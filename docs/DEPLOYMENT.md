@@ -340,7 +340,8 @@ guarda nada fuera de sus volúmenes.
 - `aurora_http_requests_total{method,route,status}` y `aurora_http_request_duration_seconds`
   (histograma con cubos de 5 ms a 10 s). Las rutas usan plantilla (`{product_id}`), no ids.
 - `aurora_http_requests_in_flight`, `aurora_process_start_time_seconds` y `aurora_info`.
-- `aurora_database_up`, `aurora_storage_bytes`, `aurora_storage_files`.
+- `aurora_database_up`, `aurora_storage_bytes`, `aurora_storage_files` (disco local o bucket S3,
+  con caché de 60 s para no listar el bucket en cada scrape).
 - `aurora_pallets_total{status}`, `aurora_deliveries_total{status}`, `aurora_tasks_open`,
   `aurora_incidents_open`, `aurora_reservations_active`, `aurora_stock_units_total`.
 

@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 from io import BytesIO
 
+from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 
-from tests.conftest import create_structure
+from app.main import app
+from tests.conftest import create_structure, login
 
 
 def _invoice(admin_client, structure) -> None:
@@ -140,6 +142,79 @@ def test_employee_report_xlsx_and_active_filter(admin_client):
     assert "Ana Informe" in inactive.text
 
 
+def test_incident_report_csv_pdf_xlsx_and_filters(admin_client):
+    structure = create_structure(admin_client)
+    created = admin_client.post(
+        "/api/v1/incidents",
+        json={
+            "title": "Palé dañado en el informe",
+            "description": "Esquina rota",
+            "incident_type": "damage",
+            "severity": "high",
+            "location_id": structure["location_id"],
+            "product_id": structure["product_id"],
+        },
+    )
+    assert created.status_code == 201, created.text
+    code = created.json()["code"]
+
+    csv = admin_client.get("/api/v1/reports/incidents.csv")
+    assert csv.status_code == 200, csv.text
+    assert "Código;Título;Tipo;Severidad" in csv.text
+    assert code in csv.text
+    assert "Daño" in csv.text and "Alta" in csv.text and "Abierta" in csv.text
+    assert "Proveedor Test" not in csv.text  # sin columnas ajenas
+
+    filtered = admin_client.get(
+        "/api/v1/reports/incidents.csv", params={"severity": "low"}
+    )
+    assert filtered.status_code == 200
+    assert code not in filtered.text
+
+    pdf = admin_client.get("/api/v1/reports/incidents.pdf")
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF-")
+
+    xlsx = admin_client.get("/api/v1/reports/incidents.xlsx")
+    assert xlsx.status_code == 200
+    workbook = load_workbook(BytesIO(xlsx.content))
+    sheet = workbook["Incidencias"]
+    assert sheet["A2"].value == code
+    assert sheet["D2"].value == "Alta"
+
+
+def test_audit_report_contains_actions_and_filters(admin_client):
+    create_structure(admin_client)
+    csv = admin_client.get("/api/v1/reports/audit.csv")
+    assert csv.status_code == 200, csv.text
+    assert "Fecha (UTC);Actor;Acción" in csv.text
+    assert "warehouse.created" in csv.text
+    assert "product.created" in csv.text
+
+    filtered = admin_client.get(
+        "/api/v1/reports/audit.csv", params={"action": "warehouse.created"}
+    )
+    assert filtered.status_code == 200
+    assert "warehouse.created" in filtered.text
+    assert "product.created" not in filtered.text
+
+    pdf = admin_client.get("/api/v1/reports/audit.pdf")
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF-")
+    xlsx = admin_client.get("/api/v1/reports/audit.xlsx")
+    assert xlsx.status_code == 200
+    workbook = load_workbook(BytesIO(xlsx.content))
+    assert workbook.sheetnames == ["Resumen", "Auditoría"]
+    assert workbook["Auditoría"]["C1"].value == "Acción"
+
+
+def test_audit_export_requires_audit_read(client, users):
+    manager = login(TestClient(app), "manager@test.local")
+    assert manager.get("/api/v1/reports/audit.csv").status_code == 403
+    assert manager.get("/api/v1/reports/audit.pdf").status_code == 403
+    assert manager.get("/api/v1/reports/audit.xlsx").status_code == 403
+    auditor = login(TestClient(app), "auditor@test.local")
+    assert auditor.get("/api/v1/reports/audit.csv").status_code == 200
+
+
 def test_business_reports_require_export_permission(worker_client):
     for path in (
         "/api/v1/reports/invoices.csv",
@@ -151,5 +226,11 @@ def test_business_reports_require_export_permission(worker_client):
         "/api/v1/reports/employees.csv",
         "/api/v1/reports/employees.pdf",
         "/api/v1/reports/employees.xlsx",
+        "/api/v1/reports/incidents.csv",
+        "/api/v1/reports/incidents.pdf",
+        "/api/v1/reports/incidents.xlsx",
+        "/api/v1/reports/audit.csv",
+        "/api/v1/reports/audit.pdf",
+        "/api/v1/reports/audit.xlsx",
     ):
         assert worker_client.get(path).status_code == 403, path

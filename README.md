@@ -60,7 +60,7 @@ Además: facturas con documento original inmutable, conciliación, personal y cu
 | Repartos con vehículos, palés y expedición real de stock | ✅ | `/repartos` y ficha `/reparto` (cargar = salida auditada) |
 | Indicadores operativos en el panel | ✅ | `/` (tareas, reservas, incidencias y disponible real) |
 | Copias verificables, prueba de humo y prueba de carga | ✅ | `scripts/backup.py`, `smoke_test.py`, `load_test.py` (ver `docs/DEPLOYMENT.md`) |
-| Informes PDF y Excel nativos | ✅ | `/informes` (inventario, movimientos, facturas, repartos y plantilla) |
+| Informes PDF y Excel nativos | ✅ | `/informes` (inventario, movimientos, facturas, repartos, plantilla, incidencias y auditoría) |
 | Métricas Prometheus | ✅ | `/metrics` (HTTP, latencias, base, almacenamiento y operación) |
 | Informes programados por correo | ✅ | `/informes` (cadencia, destinatarios, historial y envío con cron) |
 | Trazas OpenTelemetry | ✅ | `AURORA_TRACING_ENABLED=true` (OTLP/consola, `X-Trace-ID`, SQL instrumentado) |
@@ -202,7 +202,7 @@ backend/
     db/            bootstrap, triggers de inmutabilidad
   alembic/         migraciones versionadas
   scripts/         seed_demo.py, backup.py, smoke_test.py y load_test.py
-  tests/           110 pruebas automatizadas
+  tests/           115 pruebas automatizadas
 frontend/
   app/             rutas App Router (login y área autenticada)
   components/      design system, shell, selectores, escáner QR
@@ -284,7 +284,7 @@ cd backend
 ../.venv/bin/python -m pytest tests -q
 ```
 
-Resultado actual: **110 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
+Resultado actual: **115 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
 etiquetas, escaneo, facturas, mapa del almacén, reservas —incluida su caducidad—, tareas de
 almacén, incidencias, fichaje —secuencias y resumen de horas—, optimización de ubicaciones y
 rutas, repartos con expedición de stock, informes, auditoría y herramientas de operación: copia
@@ -293,8 +293,8 @@ gestionadas con evaluación, reconocimiento y notificación, OCR local sobre PDF
 de voz con permisos, calibración con regresión, planificación de turnos con solapes, tarjetas NFC con token de un solo
 uso, bolsa de horas con ajustes justificados, GPS de reparto con filtro de saltos imposibles, firma
 PNG verificada por SHA-256, llamadas con handoff o webhook, almacenamiento S3 contra `moto`,
-cola Celery real, voz Piper local con caché, informes de facturación/repartos/plantilla y copias
-de seguridad S3 de ida y vuelta).
+cola Celery real, voz Piper local con caché, informes de facturación/repartos/plantilla/incidencias/
+auditoría y copias de seguridad S3 de ida y vuelta).
 Las pruebas usan una base de datos SQLite
 temporal por ejecución; nunca tocan datos reales.
 

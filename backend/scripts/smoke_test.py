@@ -29,6 +29,8 @@ CHECKS: list[tuple[str, str, str, tuple[int, ...]]] = [
     ("Informe de facturación", "GET", "/api/v1/reports/invoices.csv", (200,)),
     ("Informe de repartos", "GET", "/api/v1/reports/deliveries.csv", (200,)),
     ("Informe de plantilla", "GET", "/api/v1/reports/employees.csv", (200,)),
+    ("Informe de incidencias", "GET", "/api/v1/reports/incidents.csv", (200,)),
+    ("Informe de auditoría", "GET", "/api/v1/reports/audit.csv", (200,)),
     ("Panel de control", "GET", "/api/v1/dashboard", (200,)),
     ("Productos", "GET", "/api/v1/products?limit=5", (200,)),
     ("Ubicaciones", "GET", "/api/v1/locations?limit=5", (200,)),

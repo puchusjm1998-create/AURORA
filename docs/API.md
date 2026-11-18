@@ -379,7 +379,16 @@ desactivar la propia cuenta.
 | GET | `/reports/employees.csv` | Plantilla (`active_only`): puesto, jornada, estado y cuenta |
 | GET | `/reports/employees.pdf` | Plantilla en PDF |
 | GET | `/reports/employees.xlsx` | Plantilla en Excel con total de jornada semanal |
+| GET | `/reports/incidents.csv` | Incidencias (`date_from`, `date_to`, `status`, `severity`, `limit`) |
+| GET | `/reports/incidents.pdf` | Incidencias en PDF: tipo, severidad, ubicación, responsable y resolución |
+| GET | `/reports/incidents.xlsx` | Incidencias en Excel nativo |
+| GET | `/reports/audit.csv` | Auditoría (`date_from`, `date_to`, `action`, `entity_type`, `actor`, `limit`) |
+| GET | `/reports/audit.pdf` | Auditoría en PDF sin los JSON de cambios, para revisión |
+| GET | `/reports/audit.xlsx` | Auditoría en Excel con columnas antes/después |
 
+`limit` está acotado a 20.000 filas (5.000 por defecto) para que una exportación no agote memoria.
+Los tres informes de auditoría exigen **a la vez** `reports.export` y `audit.read`: un responsable
+con exportación de informes no puede descargar la auditoría si su rol no la tiene.
 Los filtros de fecha de facturas usan `invoice_date` (formato `AAAA-MM-DD`); los de repartos,
 `created_at` en ISO-8601 UTC. Todos los informes requieren `reports.export`. El CSV incluye BOM y
 separador `;`; PDF y Excel comparten los datos y el formato español de números y fechas.

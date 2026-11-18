@@ -61,7 +61,7 @@ IMPLEMENTED = [
     "Almacenamiento documental con backend local o S3 compatible (AWS, MinIO, Ceph), SHA-256 y caché de descarga",
     "Cola de tareas Celery sobre Redis con worker, beat, tarea de prueba y consulta de estado",
     "Voz neuronal Piper en el servidor (ONNX local), Edge TTS y OpenAI TTS, con caché por hash y fallback del navegador",
-    "Informes nativos de facturación, repartos y plantilla en PDF, Excel y CSV, con filtros y permisos",
+    "Informes nativos de facturación, repartos, plantilla, incidencias y auditoría en PDF, Excel y CSV, con filtros y permisos",
     "Copias de seguridad que descargan y restauran documentos S3, y migración local → S3 idempotente verificada por SHA-256",
 ]
 

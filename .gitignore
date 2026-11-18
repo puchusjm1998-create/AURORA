@@ -1,0 +1,37 @@
+# Entornos virtuales y dependencias
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / Next.js
+node_modules/
+.next/
+frontend/out/
+npm-debug.log*
+yarn-error.log*
+
+# Configuración local y secretos
+.env
+.env.local
+.env.*.local
+
+# Datos locales: bases de datos, documentos y exportaciones
+backend/data/*.db
+backend/data/*.db-journal
+backend/data/*.db-wal
+backend/data/*.db-shm
+backend/data/storage/
+backend/backups/
+*.sqlite3
+
+# Sistema operativo / editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

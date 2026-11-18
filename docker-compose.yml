@@ -1,0 +1,72 @@
+# AURORA LOGISTICS AI — despliegue de referencia en cloud europea.
+# Copie .env.example a .env, defina JWT_SECRET y POSTGRES_PASSWORD, y ejecute:
+#   docker compose up -d --build
+#
+# Servicios: PostgreSQL 16 + aplicación (FastAPI + frontend compilado) en el puerto 8000.
+# Coloque delante un proxy TLS (Caddy, Traefik o el balanceador del proveedor) para HTTPS.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aurora}
+      POSTGRES_USER: ${POSTGRES_USER:-aurora}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en .env}
+      TZ: Europe/Madrid
+    volumes:
+      - aurora-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aurora} -d ${POSTGRES_DB:-aurora}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - aurora
+    # No publique el puerto de la base de datos salvo para administración puntual.
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: production
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-aurora}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-aurora}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET de al menos 32 caracteres en .env}
+      COOKIE_SECURE: "true"
+      ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-480}
+      AURORA_BOOTSTRAP: "true"
+      AURORA_RUN_MIGRATIONS: "true"
+      AURORA_ADMIN_EMAIL: ${AURORA_ADMIN_EMAIL:?Defina el correo del administrador en .env}
+      AURORA_ADMIN_PASSWORD: ${AURORA_ADMIN_PASSWORD:?Defina la contraseña inicial del administrador en .env}
+      AURORA_ADMIN_NAME: ${AURORA_ADMIN_NAME:-Administrador AURORA}
+      DEMO_MODE: "false"
+      STORAGE_DIR: /app/backend/data/storage
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
+      WAREHOUSE_TIMEZONE: Europe/Madrid
+      CORS_ORIGINS: ${PUBLIC_ORIGIN:-http://localhost:8000}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - aurora-storage:/app/backend/data/storage
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    networks:
+      - aurora
+
+volumes:
+  aurora-db:
+  aurora-storage:
+
+networks:
+  aurora:
+    driver: bridge

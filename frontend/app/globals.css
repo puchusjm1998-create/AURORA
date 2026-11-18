@@ -1386,3 +1386,33 @@ img, svg, canvas { display: block; max-width: 100%; }
   .voice-bar { grid-template-columns: auto 1fr; }
   .voice-bar .btn-primary { grid-column: 1 / -1; }
 }
+
+/* ------------------------------------------------------------------ */
+/* Turnos                                                              */
+/* ------------------------------------------------------------------ */
+.shift-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  background: var(--surface-2);
+  display: grid;
+  gap: 8px;
+}
+.shift-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.shift-head strong { font-size: 13.5px; }
+.chip-remove {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 0 0 6px;
+  font-size: 13px;
+  line-height: 1;
+}
+.chip-remove:hover { color: var(--danger); }

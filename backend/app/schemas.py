@@ -6,7 +6,7 @@ Datetime values are always normalised to UTC on the way out (ISO-8601 with a
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Annotated, Any, Generic, Literal, Optional, TypeVar
 
@@ -718,6 +718,145 @@ class PutawayCandidate(BaseModel):
     reasons: list[str]
 
 
+class CalibrationUpdate(BaseModel):
+    warehouse_id: Optional[str] = None
+    aisle_pitch_m: Decimal = Field(default=Decimal("3"), gt=0, le=100)
+    rack_pitch_m: Decimal = Field(default=Decimal("6"), gt=0, le=200)
+    position_pitch_m: Decimal = Field(default=Decimal("1"), gt=0, le=50)
+    base_pick_seconds: Decimal = Field(default=Decimal("25"), ge=0, le=3600)
+    level_penalty_seconds: Decimal = Field(default=Decimal("6"), ge=0, le=600)
+    walking_speed_mps: Decimal = Field(default=Decimal("1"), gt=0, le=5)
+    setup_seconds: Decimal = Field(default=Decimal("0"), ge=0, le=3600)
+    notes: str = Field(default="", max_length=1000)
+
+
+class TimeSampleCreate(BaseModel):
+    warehouse_id: Optional[str] = None
+    location_ids: list[str] = Field(min_length=1, max_length=50)
+    measured_seconds: int = Field(ge=1, le=86400)
+    notes: str = Field(default="", max_length=1000)
+    measured_at: Optional[datetime] = None
+
+
+class TimeSampleRead(ORMBase):
+    id: str
+    warehouse_id: str
+    warehouse_name: Optional[str] = None
+    location_ids: list[str]
+    stops: int
+    distance_m: Decimal
+    measured_seconds: int
+    notes: str
+    measured_at: UtcDateTime
+    measured_by: Optional[str] = None
+    measurer_name: Optional[str] = None
+    created_at: UtcDateTime
+
+
+class CalibrationState(BaseModel):
+    warehouse_id: Optional[str] = None
+    warehouse_code: Optional[str] = None
+    warehouse_name: Optional[str] = None
+    parameters: dict[str, float]
+    defaults: dict[str, float]
+    assumptions: dict[str, float]
+    method: str
+    is_default: bool
+    sample_count: int
+    total_samples: int
+    r_squared: Optional[float] = None
+    mae_seconds: Optional[float] = None
+    calibrated_at: Optional[str] = None
+    calibrated_by: Optional[str] = None
+    notes: str = ""
+    fit: Optional[dict[str, Any]] = None
+    samples: list[TimeSampleRead] = []
+
+
+class ShiftCreate(BaseModel):
+    warehouse_id: str
+    name: str = Field(min_length=2, max_length=80)
+    start_time: time
+    end_time: time
+    days_of_week: list[int] = Field(default_factory=lambda: [0, 1, 2, 3, 4], max_length=7)
+    required_headcount: int = Field(default=1, ge=1, le=200)
+
+    @field_validator("days_of_week")
+    @classmethod
+    def _valid_days(cls, value: list[int]) -> list[int]:
+        if not value:
+            raise ValueError("Seleccione al menos un día")
+        if any(day < 0 or day > 6 for day in value):
+            raise ValueError("Los días deben estar entre 0 (lunes) y 6 (domingo)")
+        return sorted(set(value))
+
+
+class ShiftUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=80)
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
+    days_of_week: Optional[list[int]] = Field(default=None, max_length=7)
+    required_headcount: Optional[int] = Field(default=None, ge=1, le=200)
+    is_active: Optional[bool] = None
+
+
+class ShiftRead(ORMBase):
+    id: str
+    warehouse_id: str
+    warehouse_code: Optional[str] = None
+    warehouse_name: Optional[str] = None
+    name: str
+    start_time: time
+    end_time: time
+    days_of_week: list[int]
+    required_headcount: int
+    is_active: bool
+    created_at: UtcDateTime
+
+
+class ShiftAssignmentCreate(BaseModel):
+    employee_id: str
+    work_date: date
+    note: str = Field(default="", max_length=255)
+
+
+class ShiftAssignmentRead(BaseModel):
+    id: str
+    shift_id: str
+    shift_name: str
+    employee_id: str
+    employee_code: Optional[str] = None
+    employee_name: str
+    work_date: date
+    note: str = ""
+    created_at: Optional[UtcDateTime] = None
+
+
+class ShiftPlanRow(BaseModel):
+    shift_id: str
+    name: str
+    start_time: time
+    end_time: time
+    required_headcount: int
+    assigned_count: int
+    missing: int
+    assigned: list[ShiftAssignmentRead] = []
+
+
+class ShiftDayPlan(BaseModel):
+    work_date: date
+    weekday: int
+    shifts: list[ShiftPlanRow] = []
+
+
+class ShiftPlan(BaseModel):
+    date_from: date
+    date_to: date
+    days: list[ShiftDayPlan] = []
+    total_assignments: int
+    uncovered_shifts: int
+
+
 class PutawaySuggestion(BaseModel):
     product_id: str
     product_sku: str
@@ -728,6 +867,7 @@ class PutawaySuggestion(BaseModel):
     fits: bool
     candidates: list[PutawayCandidate]
     assumptions: dict[str, float]
+    calibration: Optional[dict[str, Any]] = None
     note: str
 
 
@@ -754,8 +894,12 @@ class PickingRoute(BaseModel):
     stops: list[RouteStop]
     total_distance_m: float
     total_pick_seconds: int
+    total_walk_seconds: int = 0
+    total_estimated_seconds: int = 0
+    setup_seconds: int = 0
     return_to_dispatch: bool
     assumptions: dict[str, float]
+    calibration: Optional[dict[str, Any]] = None
     note: str
 
 
@@ -778,6 +922,7 @@ class SlottingReport(BaseModel):
     items: list[SlottingRow]
     total: int
     assumptions: dict[str, float]
+    calibration: Optional[dict[str, Any]] = None
     note: str
 
 

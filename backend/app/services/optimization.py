@@ -28,23 +28,18 @@ from sqlalchemy.orm import Session
 from app.core.enums import OUTBOUND_TYPES, MovementStatus
 from app.core.timeutils import utcnow
 from app.models import Location, Product, StockLevel, StockMovement
+from app.services.calibration import DEFAULT_CALIBRATION, Calibration
 
-AISLE_PITCH_M = 3.0
-RACK_PITCH_M = 6.0
-POSITION_PITCH_M = 1.0
-BASE_PICK_SECONDS = 25
-LEVEL_PENALTY_SECONDS = 6
+AISLE_PITCH_M = DEFAULT_CALIBRATION.aisle_pitch_m
+RACK_PITCH_M = DEFAULT_CALIBRATION.rack_pitch_m
+POSITION_PITCH_M = DEFAULT_CALIBRATION.position_pitch_m
+BASE_PICK_SECONDS = int(DEFAULT_CALIBRATION.base_pick_seconds)
+LEVEL_PENALTY_SECONDS = int(DEFAULT_CALIBRATION.level_penalty_seconds)
 
-ASSUMPTIONS: dict[str, float] = {
-    "aisle_pitch_m": AISLE_PITCH_M,
-    "rack_pitch_m": RACK_PITCH_M,
-    "position_pitch_m": POSITION_PITCH_M,
-    "base_pick_seconds": BASE_PICK_SECONDS,
-    "level_penalty_seconds": LEVEL_PENALTY_SECONDS,
-}
+ASSUMPTIONS: dict[str, float] = DEFAULT_CALIBRATION.assumptions()
 
 NOTE = (
-    "Estimación calculada con un modelo geométrico simplificado del almacén. "
+    "Estimación calculada con el modelo geométrico y los tiempos calibrados del almacén. "
     "No se mueve ni reserva stock: la decisión y el movimiento son del usuario."
 )
 
@@ -66,14 +61,17 @@ class Coordinates:
     level: int
 
 
-def coordinates(location: Location) -> Coordinates:
+def coordinates(
+    location: Location, calibration: Calibration = DEFAULT_CALIBRATION
+) -> Coordinates:
     aisle = max(1, _number(location.aisle, 1))
     rack = max(1, _number(location.rack, 1))
     level = max(1, _number(location.level, 1))
     position = max(1, _number(location.position, 1))
     return Coordinates(
-        x=(aisle - 1) * AISLE_PITCH_M,
-        y=(rack - 1) * RACK_PITCH_M + (position - 1) * POSITION_PITCH_M,
+        x=(aisle - 1) * calibration.aisle_pitch_m,
+        y=(rack - 1) * calibration.rack_pitch_m
+        + (position - 1) * calibration.position_pitch_m,
         aisle=aisle,
         level=level,
     )
@@ -140,6 +138,7 @@ def putaway_suggestions(
     pallets: int = 1,
     limit: int = 5,
     window_days: int = 30,
+    calibration: Calibration = DEFAULT_CALIBRATION,
 ) -> dict:
     moves = _moves(db, product.id, window_days)
     fast_mover = moves >= 3
@@ -158,7 +157,7 @@ def putaway_suggestions(
         free = max(location.capacity_pallets - occupied, 0)
         if free <= 0:
             continue
-        coords = coordinates(location)
+        coords = coordinates(location, calibration)
         dist = distance(coords, DISPATCH)
         score = 40.0
         reasons: list[str] = []
@@ -220,17 +219,22 @@ def putaway_suggestions(
         "window_days": window_days,
         "candidates": ranked,
         "fits": bool(fits),
-        "assumptions": ASSUMPTIONS,
+        "assumptions": calibration.assumptions(),
         "note": NOTE,
     }
 
 
-def build_route(stops: Iterable[dict], *, return_to_dispatch: bool = True) -> dict:
-    """Order stops with an S-shape sweep and compute walking/pick estimates."""
+def build_route(
+    stops: Iterable[dict],
+    *,
+    return_to_dispatch: bool = True,
+    calibration: Calibration = DEFAULT_CALIBRATION,
+) -> dict:
+    """Order stops with an S-shape sweep and compute distance, walking and pick time."""
     prepared = []
     for stop in stops:
         location: Location = stop["location"]
-        coords = coordinates(location)
+        coords = coordinates(location, calibration)
         prepared.append({**stop, "coords": coords})
 
     by_aisle: dict[int, list[dict]] = {}
@@ -250,7 +254,12 @@ def build_route(stops: Iterable[dict], *, return_to_dispatch: bool = True) -> di
         coords: Coordinates = stop["coords"]
         leg = distance(previous, coords)
         total_distance += leg
-        pick_seconds = BASE_PICK_SECONDS + LEVEL_PENALTY_SECONDS * (coords.level - 1)
+        pick_seconds = int(
+            round(
+                calibration.base_pick_seconds
+                + calibration.level_penalty_seconds * (coords.level - 1)
+            )
+        )
         total_seconds += pick_seconds
         location: Location = stop["location"]
         result_stops.append(
@@ -272,17 +281,28 @@ def build_route(stops: Iterable[dict], *, return_to_dispatch: bool = True) -> di
     if return_to_dispatch and ordered:
         total_distance += distance(previous, DISPATCH)
 
+    walk_seconds = int(round(calibration.walk_seconds(total_distance)))
+    setup = int(round(calibration.setup_seconds)) if ordered else 0
     return {
         "stops": result_stops,
         "total_distance_m": round(total_distance, 1),
         "total_pick_seconds": total_seconds,
+        "total_walk_seconds": walk_seconds,
+        "total_estimated_seconds": setup + walk_seconds + total_seconds,
+        "setup_seconds": setup,
         "return_to_dispatch": return_to_dispatch,
-        "assumptions": ASSUMPTIONS,
+        "assumptions": calibration.assumptions(),
         "note": NOTE,
     }
 
 
-def slotting_analysis(db: Session, *, days: int = 30, limit: int = 25) -> dict:
+def slotting_analysis(
+    db: Session,
+    *,
+    days: int = 30,
+    limit: int = 25,
+    calibration: Calibration = DEFAULT_CALIBRATION,
+) -> dict:
     since = utcnow() - timedelta(days=days)
     movement_rows = db.execute(
         select(
@@ -329,7 +349,10 @@ def slotting_analysis(db: Session, *, days: int = 30, limit: int = 25) -> dict:
         if not locations and count == 0:
             continue
         pick_face = any(location.is_pick_face for location, _ in locations)
-        nearest = min((distance(coordinates(location), DISPATCH) for location, _ in locations), default=None)
+        nearest = min(
+            (distance(coordinates(location, calibration), DISPATCH) for location, _ in locations),
+            default=None,
+        )
         recommendation = "Mantener ubicación actual"
         reason = "Sin cambios necesarios con los datos actuales."
         if count >= 3 and not pick_face:
@@ -365,6 +388,6 @@ def slotting_analysis(db: Session, *, days: int = 30, limit: int = 25) -> dict:
         "days": days,
         "items": rows[:limit],
         "total": len(rows),
-        "assumptions": ASSUMPTIONS,
+        "assumptions": calibration.assumptions(),
         "note": NOTE,
     }

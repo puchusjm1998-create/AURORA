@@ -29,6 +29,7 @@ from app.core.config import get_settings  # noqa: E402
 from app.core.db import SessionLocal, engine  # noqa: E402
 from app.core.enums import (  # noqa: E402
     AlertMetric,
+    CalibrationMethod,
     AlertOperator,
     AlertSeverity,
     AttendanceEventType,
@@ -50,6 +51,9 @@ from app.core.timeutils import MADRID  # noqa: E402
 from app.db.triggers import install_immutability_triggers  # noqa: E402
 from app.models import (  # noqa: E402
     AlertRule,
+    ShiftAssignment,
+    WarehouseCalibration,
+    WorkShift,
     AttendanceRecord,
     Delivery,
     DeliveryPallet,
@@ -719,6 +723,65 @@ def build(args: argparse.Namespace) -> None:
             created_by=supervisor.id,
         )
         db.add(schedule)
+        shift_morning = WorkShift(
+            warehouse_id=warehouse.id,
+            name="Turno de mañana",
+            start_time=time(6, 0),
+            end_time=time(14, 0),
+            days_of_week=[0, 1, 2, 3, 4],
+            required_headcount=3,
+            created_by=supervisor.id,
+        )
+        shift_afternoon = WorkShift(
+            warehouse_id=warehouse.id,
+            name="Turno de tarde",
+            start_time=time(14, 0),
+            end_time=time(22, 0),
+            days_of_week=[0, 1, 2, 3, 4],
+            required_headcount=2,
+            created_by=supervisor.id,
+        )
+        db.add_all([shift_morning, shift_afternoon])
+        db.flush()
+        monday = now.date() - timedelta(days=now.weekday())
+        db.add_all(
+            [
+                ShiftAssignment(
+                    shift_id=shift_morning.id,
+                    employee_id=employees["pablo@aurora.demo"].id,
+                    work_date=monday,
+                    created_by=supervisor.id,
+                ),
+                ShiftAssignment(
+                    shift_id=shift_morning.id,
+                    employee_id=employees["diego@aurora.demo"].id,
+                    work_date=monday,
+                    created_by=supervisor.id,
+                ),
+                ShiftAssignment(
+                    shift_id=shift_afternoon.id,
+                    employee_id=employees["operario@aurora.demo"].id,
+                    work_date=monday,
+                    created_by=supervisor.id,
+                ),
+            ]
+        )
+        db.add(
+            WarehouseCalibration(
+                warehouse_id=warehouse.id,
+                aisle_pitch_m=Decimal("3.20"),
+                rack_pitch_m=Decimal("6.40"),
+                position_pitch_m=Decimal("1.10"),
+                base_pick_seconds=Decimal("22"),
+                level_penalty_seconds=Decimal("7"),
+                walking_speed_mps=Decimal("1.15"),
+                setup_seconds=Decimal("15"),
+                method=CalibrationMethod.MANUAL,
+                sample_count=0,
+                calibrated_by=supervisor.id,
+                notes="Medidas iniciales del plano del almacén demo; pendiente de cronometrajes.",
+            )
+        )
         db.add_all(
             [
                 AlertRule(

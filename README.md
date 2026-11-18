@@ -42,7 +42,7 @@ valida permisos en el servidor y registra cada operación en un libro de auditor
 Además: facturas con documento original inmutable, conciliación, personal y cuentas con RBAC de
 5 niveles, auditoría append-only, informes CSV y página de transparencia `/sistema`.
 
-### Fases 2 a 14 entregadas
+### Capacidades de las fases 2 a 14
 
 | Funcionalidad | Estado | Dónde |
 |---|---|---|
@@ -63,6 +63,8 @@ Además: facturas con documento original inmutable, conciliación, personal y cu
 | Alertas gestionadas | ✅ | `/alertas` (reglas por umbral, cooldown, reconocimiento, resolución y correo) |
 | OCR local de facturas | ✅ | `/facturas` (PDF/imagen, proveedor, fechas, totales y líneas; revisión humana) |
 | AURORA Voice | ✅ | `/voz` (dictado y lectura del navegador; respuestas con datos reales, sin audio fuera del dispositivo) |
+| Calibración del almacén | ✅ | `/optimizacion` (plano, tiempos cronometrados y regresión con R²/MAE) |
+| Turnos de trabajo | ✅ | `/turnos` (plantillas semanales, cobertura exigida, asignación y solapes) |
 
 ### Lo que todavía no está implementado (y no se muestra como si lo estuviera)
 
@@ -79,8 +81,10 @@ las identifica explícitamente:
   turnos planificados y bolsa de horas** (Fase 7). Los repartos ya expiden stock real.
 - **Notificaciones asíncronas** (Redis/Celery): las alertas y los informes ya se envían por SMTP,
   pero la evaluación corre en cron síncrono y no hay cola de trabajos.
-- **Calibración del modelo de distancias** con el plano real del almacén y tiempos medidos (Fase 6
-  avanzada): hoy las sugerencias son reales, pero la geometría es una aproximación declarada.
+- **Bolsa de horas y turnos con firma NFC** (Fase 7): la planificación semanal ya es real y se
+  controlan solapes, pero no hay fichaje NFC ni cómputo de bolsa de horas.
+- **Medición automática de tiempos**: los cronometrajes se introducen desde la ruta calculada; no
+  hay sensores ni lectores de presencia que midan recorridos sin intervención.
 
 ---
 
@@ -157,7 +161,7 @@ backend/
     db/            bootstrap, triggers de inmutabilidad
   alembic/         migraciones versionadas
   scripts/         seed_demo.py, backup.py, smoke_test.py y load_test.py
-  tests/           79 pruebas automatizadas
+  tests/           83 pruebas automatizadas
 frontend/
   app/             rutas App Router (login y área autenticada)
   components/      design system, shell, selectores, escáner QR
@@ -239,13 +243,13 @@ cd backend
 ../.venv/bin/python -m pytest tests -q
 ```
 
-Resultado actual: **79 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
+Resultado actual: **83 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
 etiquetas, escaneo, facturas, mapa del almacén, reservas —incluida su caducidad—, tareas de
 almacén, incidencias, fichaje —secuencias y resumen de horas—, optimización de ubicaciones y
 rutas, repartos con expedición de stock, informes, auditoría y herramientas de operación: copia
 con manifiesto SHA-256, retención y restauración, e informes PDF/Excel con contenido verificado, métricas Prometheus, envío SMTP con un servidor local de prueba, trazas OpenTelemetry, alertas
 gestionadas con evaluación, reconocimiento y notificación, OCR local sobre PDF e imagen y consultas
-de voz con permisos).
+de voz con permisos, calibración con regresión y planificación de turnos con solapes).
 Las pruebas usan una base de datos SQLite
 temporal por ejecución; nunca tocan datos reales.
 

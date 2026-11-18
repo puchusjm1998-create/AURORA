@@ -264,3 +264,8 @@ class AlertStatus(StrEnum):
     OPEN = "open"
     ACKNOWLEDGED = "acknowledged"
     RESOLVED = "resolved"
+
+
+class CalibrationMethod(StrEnum):
+    MANUAL = "manual"
+    REGRESSION = "regression"

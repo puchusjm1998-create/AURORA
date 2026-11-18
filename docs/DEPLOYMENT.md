@@ -358,6 +358,18 @@ Prueba recomendada antes de producción: cree una programación con su propia cu
 **Enviar** y confirme que el adjunto (PDF/Excel/CSV) llega y abre correctamente. El flujo completo
 está cubierto por pruebas automatizadas contra un servidor SMTP local.
 
+### Calibración y turnos
+
+La calibración se guarda en base de datos (`warehouse_calibrations`) y los cronometrajes en
+`route_time_samples`; no requiere configuración adicional. Tras medir el plano, guarde los valores
+en `/optimizacion` y registre al menos tres rutas cronometradas antes de pulsar **Ajustar**. El
+ajuste muestra R² y MAE: si R² es bajo, revise las muestras en lugar de aceptar el resultado.
+
+Los turnos (`work_shifts`, `shift_assignments`) se planifican en `/turnos`. No hay proceso en
+segundo plano: el plan se calcula al consultar la semana. Revise cada lunes los huecos marcados en
+ámbar y asigne personal; el sistema rechaza solapes y días no planificados. Las plantillas con
+asignaciones deben pausarse, no borrarse, para conservar el historial.
+
 ### OCR local de facturas
 
 El OCR funciona dentro del contenedor: no requiere claves ni servicios externos. Compruebe el motor

@@ -61,6 +61,7 @@ const NAV: NavEntry[] = [
   { href: "/facturas", label: "Facturas", permission: "invoices.read", icon: <IconInvoice />, group: "Gestión", match: "/factura" },
   { href: "/informes", label: "Informes", permission: "reports.read", icon: <IconReports />, group: "Gestión" },
   { href: "/personal", label: "Personal", permission: "workers.read", icon: <IconUsers />, group: "Gestión" },
+  { href: "/turnos", label: "Turnos", permission: "workers.read", icon: <IconClock />, group: "Gestión" },
   { href: "/auditoria", label: "Auditoría", permission: "audit.read", icon: <IconShield />, group: "Gestión" },
 ];
 

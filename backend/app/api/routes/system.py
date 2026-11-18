@@ -39,11 +39,12 @@ IMPLEMENTED = [
     "Alertas gestionadas: reglas sobre indicadores reales, cooldown, reconocimiento y resolución",
     "OCR local de facturas en PDF o imagen, con propuesta de campos y revisión humana",
     "AURORA Voice: dictado y lectura en el navegador con consultas reales de stock, tareas y repartos",
+    "Calibración del almacén con plano real y tiempos cronometrados, con ajuste por regresión",
+    "Turnos de trabajo semanales con cobertura exigida, asignación y control de solapes",
 ]
 
 PENDING = [
-    "Fase 6: calibración fina con plano real, tiempos medidos y turnos de trabajo",
-    "Fase 7: tarjetas digitales NFC, planificación de turnos y bolsa de horas",
+    "Fase 7: tarjetas digitales NFC y bolsa de horas (los turnos ya están planificados)",
     "Fase 8: integración telefónica SIP/API, seguimiento GPS y firma de entrega",
 ]
 
@@ -57,7 +58,7 @@ def system_info() -> SystemInfo:
         demo_mode=settings.demo_mode,
         server_time_utc=utcnow().isoformat().replace("+00:00", "Z"),
         warehouse_timezone=settings.warehouse_timezone,
-        phase="Fases 1-14: operación de almacén, observabilidad, alertas, OCR y asistente de voz",
+        phase="Fases 1-6 y 9-14: operación completa, voz, OCR, alertas y turnos; quedan fases 7 y 8",
         implemented=IMPLEMENTED,
         pending=PENDING,
     )

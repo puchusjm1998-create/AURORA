@@ -410,3 +410,44 @@ navegadores sin Web Speech API solo funciona el texto. No hay conversación mult
 ni preguntas abiertas fuera de las intenciones cubiertas (devuelve `unknown` con sugerencias). No
 se guarda historial ni audio, lo que también impide auditar las consultas de voz. El NLU no es un
 LLM: sinónimos y frases muy libres pueden caer en `unknown`.
+
+---
+
+## D-35 · Calibración explícita con regresión sobre tiempos de campo
+
+**Decisión.** Cada almacén guarda sus pasos de pasillo, estantería y posición, tiempo base de
+parada, penalización por nivel, velocidad, preparación fija y notas. Los cronometrajes de ruta se
+almacenan con las ubicaciones, la distancia calculada y los segundos medidos. El ajuste usa
+mínimos cuadrados `tiempo = intercepto + distancia/velocidad + paradas·tiempo_parada`, con al menos
+3 muestras de distancias distintas, y publica R² y MAE. Los parámetros geométricos no se deducen
+del tiempo: se miden en el plano.
+
+**Por qué.** El modelo deja de ser una aproximación fija y pasa a ser auditable contra la realidad
+del almacén. Separar geometría y tiempos evita que una regresión con pocos datos “invente” pasillos
+que no existen. Las rutas muestran distancia, marcha, preparación y tiempo total, de modo que la
+estimación se puede comparar con el cronómetro.
+
+**Límites.** La regresión es lineal y con pocas muestras puede ser inestable; por eso se exigen tres
+y se acotan velocidad y tiempos a rangos físicos. No se modelan atascos, esperas de carretilla,
+alturas de recogida ni diferencias por operario. Las muestras se introducen a mano tras cronometrar
+una ruta; no hay medición automática por sensores.
+
+---
+
+## D-36 · Turnos semanales por plantilla y asignación diaria
+
+**Decisión.** Un turno es una plantilla (almacén, nombre, hora inicio/fin, días de la semana y
+personas necesarias). Las asignaciones son por empleado y fecha, con unicidad y comprobación de
+solape horario. El plan semanal calcula cobertura y huecos por día; las plantillas con asignaciones
+no se borran, se pausan. La vista exige `workers.read` y la gestión `workers.write`.
+
+**Por qué.** Planificar por plantilla evita duplicar horarios cada semana y mantiene el histórico de
+asignaciones. Controlar solapes en el servidor impide que una persona quede en dos turnos
+incompatibles. Enseñar los huecos es más útil que una cobertura agregada que oculte días sin
+personal.
+
+**Límites.** No se generan turnos rotativos automáticos ni se optimiza el reparto de personas; no
+hay bolsa de horas, fichaje NFC ni firma de turno. Un turno no cruza medianoche (se rechaza el
+horario invertido). Los cambios de días no se aplican si dejarían asignaciones huérfanas: hay que
+retirarlas primero. La cobertura es informativa: el sistema avisa del hueco, no bloqueaguardar el
+plan.

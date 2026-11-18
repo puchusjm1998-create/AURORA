@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { api, errorMessage } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { useApi } from "@/lib/useApi";
 import { fmtMinutes, fmtNumber, fmtQty } from "@/lib/format";
 import type {
@@ -25,6 +26,7 @@ import {
   useToast,
 } from "@/components/ui";
 import { IconRefresh, IconRoute } from "@/components/icons";
+import { CalibrationPanel } from "@/components/CalibrationPanel";
 
 function recommendationTone(recommendation: string): string {
   if (recommendation.startsWith("Liberar")) return "warning";
@@ -34,6 +36,10 @@ function recommendationTone(recommendation: string): string {
 
 export default function OptimizationPage() {
   const toast = useToast();
+  const { can } = useAuth();
+  const [calibrationToken, setCalibrationToken] = useState(0);
+  const [measuredSeconds, setMeasuredSeconds] = useState("");
+  const [savingSample, setSavingSample] = useState(false);
 
   const [product, setProduct] = useState<Product | null>(null);
   const [pallets, setPallets] = useState("1");
@@ -76,6 +82,33 @@ export default function OptimizationPage() {
       setPutawayError(errorMessage(err));
     } finally {
       setPutawayLoading(false);
+    }
+  }
+
+  async function registerTimeStudy() {
+    if (!route || route.stops.length === 0) return;
+    const seconds = Number(measuredSeconds);
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+      toast.error("Tiempo no válido", "Indique los segundos cronometrados para esta ruta.");
+      return;
+    }
+    setSavingSample(true);
+    try {
+      await api("/api/v1/optimization/time-studies", {
+        method: "POST",
+        body: {
+          location_ids: route.stops.map((stop) => stop.location_id),
+          measured_seconds: Math.round(seconds),
+          notes: `Cronometraje de ruta de ${route.stops.length} parada(s)`,
+        },
+      });
+      toast.success("Tiempo registrado", "Ya puede ajustar la calibración con las muestras.");
+      setMeasuredSeconds("");
+      setCalibrationToken((current) => current + 1);
+    } catch (err) {
+      toast.error("No se pudo registrar", errorMessage(err));
+    } finally {
+      setSavingSample(false);
     }
   }
 
@@ -127,6 +160,13 @@ export default function OptimizationPage() {
           </button>
         }
       />
+
+      <div style={{ marginBottom: 18 }}>
+        <CalibrationPanel
+          refreshToken={calibrationToken}
+          onChanged={() => setCalibrationToken((current) => current + 1)}
+        />
+      </div>
 
       <section className="card" style={{ marginBottom: 18 }}>
         <div className="card-body">
@@ -354,6 +394,12 @@ export default function OptimizationPage() {
                 <span className="count-chip">
                   {fmtMinutes(Math.round(route.total_pick_seconds / 60))} de preparación
                 </span>
+                <span className="count-chip">
+                  {fmtMinutes(Math.round(route.total_estimated_seconds / 60))} estimados
+                </span>
+                <span className="tiny text-muted">
+                  {route.total_walk_seconds} s de marcha · {route.setup_seconds} s de preparación
+                </span>
                 <span className="tiny text-muted">
                   {route.return_to_dispatch ? "incluye vuelta al muelle" : "sin vuelta al muelle"}
                 </span>
@@ -416,6 +462,30 @@ export default function OptimizationPage() {
               <div className="tiny text-muted" style={{ marginTop: 8 }}>
                 {route.note}
               </div>
+              {can("locations.write") && route.stops.length > 0 ? (
+                <div className="row" style={{ marginTop: 12, alignItems: "flex-end", gap: 8 }}>
+                  <Field label="Cronometrar esta ruta" hint="Segundos reales desde el muelle hasta volver">
+                    <input
+                      className="input"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={measuredSeconds}
+                      onChange={(event) => setMeasuredSeconds(event.target.value)}
+                      placeholder="p. ej. 245"
+                      style={{ width: 150 }}
+                    />
+                  </Field>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={registerTimeStudy}
+                    disabled={savingSample || !measuredSeconds}
+                  >
+                    {savingSample ? <span className="spinner" /> : <IconRoute />} Registrar tiempo
+                  </button>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>

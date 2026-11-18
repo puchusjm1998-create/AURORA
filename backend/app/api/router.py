@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.routes import (
     alerts,
+    shifts,
     voice,
     analytics,
     auth,
@@ -43,4 +44,5 @@ api_router.include_router(analytics.router)
 api_router.include_router(report_schedules.router)
 api_router.include_router(alerts.router)
 api_router.include_router(voice.router)
+api_router.include_router(shifts.router)
 api_router.include_router(labels.router)

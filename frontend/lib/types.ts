@@ -486,8 +486,12 @@ export interface PickingRoute {
   stops: RouteStop[];
   total_distance_m: number;
   total_pick_seconds: number;
+  total_walk_seconds: number;
+  total_estimated_seconds: number;
+  setup_seconds: number;
   return_to_dispatch: boolean;
   assumptions: Record<string, number>;
+  calibration: Record<string, unknown> | null;
   note: string;
 }
 
@@ -837,4 +841,93 @@ export interface VoiceStatus {
   llm_configured: boolean;
   locale: string;
   capabilities: string[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Fase 6: calibración, tiempos y turnos                               */
+/* ------------------------------------------------------------------ */
+export interface TimeSample {
+  id: string;
+  warehouse_id: string;
+  warehouse_name: string | null;
+  location_ids: string[];
+  stops: number;
+  distance_m: string;
+  measured_seconds: number;
+  notes: string;
+  measured_at: string;
+  measured_by: string | null;
+  measurer_name: string | null;
+  created_at: string;
+}
+
+export interface CalibrationState {
+  warehouse_id: string | null;
+  warehouse_code: string | null;
+  warehouse_name: string | null;
+  parameters: Record<string, number>;
+  defaults: Record<string, number>;
+  assumptions: Record<string, number>;
+  method: "default" | "manual" | "regression" | string;
+  is_default: boolean;
+  sample_count: number;
+  total_samples: number;
+  r_squared: number | null;
+  mae_seconds: number | null;
+  calibrated_at: string | null;
+  calibrated_by: string | null;
+  notes: string;
+  fit: Record<string, unknown> | null;
+  samples: TimeSample[];
+}
+
+export interface WorkShift {
+  id: string;
+  warehouse_id: string;
+  warehouse_code: string | null;
+  warehouse_name: string | null;
+  name: string;
+  start_time: string;
+  end_time: string;
+  days_of_week: number[];
+  required_headcount: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface ShiftAssignment {
+  id: string;
+  shift_id: string;
+  shift_name: string;
+  employee_id: string;
+  employee_code: string | null;
+  employee_name: string;
+  work_date: string;
+  note: string;
+  created_at: string | null;
+}
+
+export interface ShiftPlanRow {
+  shift_id: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+  required_headcount: number;
+  assigned_count: number;
+  missing: number;
+  assigned: ShiftAssignment[];
+}
+
+export interface ShiftDayPlan {
+  work_date: string;
+  weekday: number;
+  shifts: ShiftPlanRow[];
+}
+
+export interface ShiftPlan {
+  date_from: string;
+  date_to: string;
+  days: ShiftDayPlan[];
+  total_assignments: number;
+  uncovered_shifts: number;
 }

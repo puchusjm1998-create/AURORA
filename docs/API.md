@@ -434,6 +434,40 @@ base de datos, almacenamiento y gauges de operación (palés, repartos, tareas, 
 reservas y unidades). Si `METRICS_TOKEN` está definido, exige `Authorization: Bearer <token>`;
 en caso contrario debe limitarse el acceso por red. El propio scrape no se contabiliza.
 
+## Calibración y tiempos medidos
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/optimization/calibration` | Parámetros vigentes, métricas del ajuste y últimas muestras |
+| PUT | `/optimization/calibration` | Guarda plano y tiempos manuales (`locations.write`) |
+| POST | `/optimization/calibration/fit` | Ajuste por mínimos cuadrados con las rutas cronometradas |
+| POST | `/optimization/time-studies` | Registra una ruta y su tiempo real; calcula la distancia con el modelo vigente |
+| DELETE | `/optimization/time-studies/{id}` | Elimina una muestra (no recalcula el ajuste hasta repetirlo) |
+
+Las rutas de picking incluyen `total_walk_seconds`, `total_estimated_seconds`, `setup_seconds` y el
+bloque `calibration` con almacén, método, muestras, R² y MAE. El ajuste necesita **al menos 3
+muestras con distancias distintas**; si no, devuelve 422 `insufficient_samples`. La regresión estima
+velocidad, tiempo de parada y preparación fija; las distancias del plano se editan a mano porque no
+se pueden deducir del tiempo.
+
+## Turnos de trabajo
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/shifts` | Plantillas del almacén (`warehouse_id`, `include_inactive`) |
+| POST | `/shifts` | Crea una plantilla (`workers.write`) |
+| PATCH | `/shifts/{id}` | Horario, días, cobertura, nombre o pausa |
+| DELETE | `/shifts/{id}` | Solo si no tiene asignaciones (409 `shift_has_assignments`) |
+| GET | `/shifts/plan` | Plan por fechas (`date_from`, `date_to`, máximo 62 días) |
+| POST | `/shifts/{id}/assignments` | Asigna una persona a una fecha |
+| DELETE | `/shifts/{id}/assignments/{assignment_id}` | Retira la asignación |
+
+Los días van de 0 (lunes) a 6 (domingo). Se rechazan horarios invertidos (422
+`invalid_shift_hours`), asignaciones en días no planificados (422 `weekday_not_scheduled`),
+duplicados (409 `duplicate_assignment`) y solapes del mismo empleado (409 `shift_overlap`).
+El plan indica `assigned_count`, `missing` y `uncovered_shifts`; la cobertura se controla por
+plantilla y día, sin ocultar los huecos.
+
 ## AURORA Voice
 
 | Método | Ruta | Descripción |

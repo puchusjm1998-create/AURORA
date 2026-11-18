@@ -16,7 +16,7 @@ The schema is intentionally explicit and normalised:
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -34,6 +34,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    Time,
     UniqueConstraint,
     text,
 )
@@ -41,6 +42,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.core.enums import (
     AlertMetric,
+    CalibrationMethod,
     AlertOperator,
     AlertSeverity,
     AlertStatus,
@@ -976,3 +978,103 @@ class Alert(Base, TimestampMixin):
         foreign_keys=[acknowledged_by], lazy="joined"
     )
     resolver: Mapped[Optional["User"]] = relationship(foreign_keys=[resolved_by], lazy="joined")
+
+
+class WarehouseCalibration(Base, TimestampMixin):
+    """Parámetros medidos del almacén usados por el modelo de rutas."""
+
+    __tablename__ = "warehouse_calibrations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    warehouse_id: Mapped[str] = mapped_column(
+        ForeignKey("warehouses.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    aisle_pitch_m: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=Decimal("3"), nullable=False)
+    rack_pitch_m: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=Decimal("6"), nullable=False)
+    position_pitch_m: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=Decimal("1"), nullable=False)
+    base_pick_seconds: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=Decimal("25"), nullable=False)
+    level_penalty_seconds: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=Decimal("6"), nullable=False)
+    walking_speed_mps: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("1"), nullable=False)
+    setup_seconds: Mapped[Decimal] = mapped_column(Numeric(7, 2), default=Decimal("0"), nullable=False)
+    method: Mapped[CalibrationMethod] = mapped_column(
+        enum_column(CalibrationMethod, "calibration_method"),
+        default=CalibrationMethod.MANUAL,
+        nullable=False,
+    )
+    sample_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    r_squared: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 4))
+    mae_seconds: Mapped[Optional[Decimal]] = mapped_column(Numeric(7, 2))
+    calibrated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    calibrated_by: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
+
+    warehouse: Mapped["Warehouse"] = relationship(lazy="joined")
+    calibrator: Mapped[Optional["User"]] = relationship(foreign_keys=[calibrated_by], lazy="joined")
+
+
+class RouteTimeSample(Base, TimestampMixin):
+    """Tiempo cronometrado en campo para una ruta concreta."""
+
+    __tablename__ = "route_time_samples"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    warehouse_id: Mapped[str] = mapped_column(
+        ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    location_ids: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    stops: Mapped[int] = mapped_column(Integer, nullable=False)
+    distance_m: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    measured_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    measured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    measured_by: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+    warehouse: Mapped["Warehouse"] = relationship(lazy="joined")
+    measurer: Mapped[Optional["User"]] = relationship(foreign_keys=[measured_by], lazy="joined")
+
+
+class WorkShift(Base, TimestampMixin):
+    """Plantilla semanal de turno para un almacén."""
+
+    __tablename__ = "work_shifts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    warehouse_id: Mapped[str] = mapped_column(
+        ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    start_time: Mapped[time] = mapped_column(Time, nullable=False)
+    end_time: Mapped[time] = mapped_column(Time, nullable=False)
+    days_of_week: Mapped[list[int]] = mapped_column(JSON, default=list, nullable=False)
+    required_headcount: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+    warehouse: Mapped["Warehouse"] = relationship(lazy="joined")
+    assignments: Mapped[list["ShiftAssignment"]] = relationship(
+        back_populates="shift", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class ShiftAssignment(Base, TimestampMixin):
+    """Asignación de una persona a un turno en una fecha concreta."""
+
+    __tablename__ = "shift_assignments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    shift_id: Mapped[str] = mapped_column(
+        ForeignKey("work_shifts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    employee_id: Mapped[str] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    work_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    note: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    created_by: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+    shift: Mapped["WorkShift"] = relationship(back_populates="assignments", lazy="joined")
+    employee: Mapped["Employee"] = relationship(lazy="joined")
+
+    __table_args__ = (
+        UniqueConstraint("shift_id", "employee_id", "work_date", name="uq_shift_employee_date"),
+    )

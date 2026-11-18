@@ -60,7 +60,7 @@ Además: facturas con documento original inmutable, conciliación, personal y cu
 | Repartos con vehículos, palés y expedición real de stock | ✅ | `/repartos` y ficha `/reparto` (cargar = salida auditada) |
 | Indicadores operativos en el panel | ✅ | `/` (tareas, reservas, incidencias y disponible real) |
 | Copias verificables, prueba de humo y prueba de carga | ✅ | `scripts/backup.py`, `smoke_test.py`, `load_test.py` (ver `docs/DEPLOYMENT.md`) |
-| Informes PDF y Excel nativos | ✅ | `/informes` (PDF paginado, Excel con resumen y totales) |
+| Informes PDF y Excel nativos | ✅ | `/informes` (inventario, movimientos, facturas, repartos y plantilla) |
 | Métricas Prometheus | ✅ | `/metrics` (HTTP, latencias, base, almacenamiento y operación) |
 | Informes programados por correo | ✅ | `/informes` (cadencia, destinatarios, historial y envío con cron) |
 | Trazas OpenTelemetry | ✅ | `AURORA_TRACING_ENABLED=true` (OTLP/consola, `X-Trace-ID`, SQL instrumentado) |
@@ -77,6 +77,8 @@ Además: facturas con documento original inmutable, conciliación, personal y cu
 | Llamadas con handoff SIP/tel | ✅ | `/llamadas` (registro, enlaces `tel:`/`sip:`, webhook y callback del proveedor) |
 | Almacenamiento S3 compatible | ✅ | `STORAGE_BACKEND=s3` (AWS, MinIO o Ceph), misma clave, SHA-256 y caché de descarga |
 | Cola Redis + Celery | ✅ | Worker y beat; `/sistema` muestra broker, worker, tarea de prueba y estado |
+| Copias con documentos S3 | ✅ | `scripts/backup.py` descarga el bucket al tar y restaura con clave, MIME y SHA-256 |
+| Migración local → S3 | ✅ | `scripts/storage_migrate.py` idempotente, con verificación y `--dry-run` |
 | Voz neuronal local | ✅ | `VOICE_TTS_PROVIDER=piper`, modelo ONNX español y caché por hash; sin salida a Internet |
 
 ### Lo que todavía no está implementado o depende del entorno
@@ -200,7 +202,7 @@ backend/
     db/            bootstrap, triggers de inmutabilidad
   alembic/         migraciones versionadas
   scripts/         seed_demo.py, backup.py, smoke_test.py y load_test.py
-  tests/           104 pruebas automatizadas
+  tests/           110 pruebas automatizadas
 frontend/
   app/             rutas App Router (login y área autenticada)
   components/      design system, shell, selectores, escáner QR
@@ -282,7 +284,7 @@ cd backend
 ../.venv/bin/python -m pytest tests -q
 ```
 
-Resultado actual: **104 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
+Resultado actual: **110 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
 etiquetas, escaneo, facturas, mapa del almacén, reservas —incluida su caducidad—, tareas de
 almacén, incidencias, fichaje —secuencias y resumen de horas—, optimización de ubicaciones y
 rutas, repartos con expedición de stock, informes, auditoría y herramientas de operación: copia
@@ -291,7 +293,8 @@ gestionadas con evaluación, reconocimiento y notificación, OCR local sobre PDF
 de voz con permisos, calibración con regresión, planificación de turnos con solapes, tarjetas NFC con token de un solo
 uso, bolsa de horas con ajustes justificados, GPS de reparto con filtro de saltos imposibles, firma
 PNG verificada por SHA-256, llamadas con handoff o webhook, almacenamiento S3 contra `moto`,
-cola Celery real y voz Piper local con caché).
+cola Celery real, voz Piper local con caché, informes de facturación/repartos/plantilla y copias
+de seguridad S3 de ida y vuelta).
 Las pruebas usan una base de datos SQLite
 temporal por ejecución; nunca tocan datos reales.
 
@@ -334,6 +337,7 @@ healthchecks. Herramientas de operación incluidas, sin dependencias nuevas:
 ```bash
 cd backend
 ../.venv/bin/python -m scripts.backup --label diaria --keep 14   # copia + manifiesto SHA-256
+../.venv/bin/python -m scripts.storage_migrate --dry-run          # migrar documentos a S3
 ../.venv/bin/python -m scripts.backup --list                     # copias disponibles
 ../.venv/bin/python -m scripts.smoke_test --base-url https://aurora.example.com
 ../.venv/bin/python -m scripts.load_test --concurrency 8 --duration 20

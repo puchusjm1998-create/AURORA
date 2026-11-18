@@ -14,12 +14,15 @@ Uso habitual (con el servicio parado o en una ventana de baja actividad):
 
 SQLite se copia con la API de backup del motor (consistente con la base viva).
 PostgreSQL se vuelca con ``pg_dump -Fc``; la restauración usa ``pg_restore``.
+Con ``STORAGE_BACKEND=s3`` los documentos se descargan del bucket al tar y la
+restauración vuelve a subirlos con su misma clave, tipo MIME y SHA-256.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -27,11 +30,13 @@ import sqlite3
 import subprocess
 import sys
 import tarfile
+import tempfile
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from app.core.config import BACKEND_DIR, get_settings
+from app.services import s3 as s3_storage
 
 settings = get_settings()
 
@@ -114,6 +119,35 @@ def archive_storage(storage_dir: Path, target: Path) -> int:
     return files
 
 
+def archive_s3(target: Path) -> dict[str, Any]:
+    """Descarga todos los objetos del bucket a un tar con la misma estructura.
+
+    La raíz del archivo se llama ``storage`` para que una copia S3 se pueda
+    restaurar en disco local y viceversa sin cambiar el manifiesto.
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+    prefix = settings.s3_prefix.strip().strip("/")
+    files = 0
+    total = 0
+    with tarfile.open(target, "w:gz") as archive:
+        for key, _size in s3_storage.iter_objects():
+            relative = key[len(prefix) + 1 :] if prefix and key.startswith(prefix + "/") else key
+            if (
+                not relative
+                or relative.startswith("/")
+                or ".." in PurePosixPath(relative).parts
+            ):
+                raise RuntimeError(f"Clave S3 insegura en la copia: {key!r}")
+            data = s3_storage.download_bytes(relative)
+            info = tarfile.TarInfo(name=str(Path("storage") / relative))
+            info.size = len(data)
+            info.mtime = int(datetime.now(timezone.utc).timestamp())
+            archive.addfile(info, io.BytesIO(data))
+            files += 1
+            total += len(data)
+    return {"files": files, "bytes": total, "archive_bytes": target.stat().st_size}
+
+
 def create_backup(
     output_dir: Path,
     *,
@@ -122,11 +156,13 @@ def create_backup(
     keep: int | None = None,
     label: str | None = None,
     include_storage: bool = True,
+    storage_backend: str | None = None,
     moment: datetime | None = None,
 ) -> Path:
     """Crea ``output_dir/aurora-<fecha>`` y devuelve su ruta."""
     database_url = database_url or settings.database_url
     storage_dir = Path(storage_dir or settings.storage_dir)
+    backend = (storage_backend or settings.storage_backend).strip().lower()
     output_dir.mkdir(parents=True, exist_ok=True)
     target = output_dir / build_name(label, moment)
     if target.exists():
@@ -165,14 +201,30 @@ def create_backup(
 
     if include_storage:
         archive = target / "storage.tar.gz"
-        files = archive_storage(storage_dir, archive)
-        manifest["storage"] = {
-            "source": str(storage_dir),
-            "file": archive.name,
-            "files": files,
-            "bytes": archive.stat().st_size,
-            "sha256": sha256_file(archive),
-        }
+        if backend == "s3":
+            if not settings.s3_configured:
+                raise RuntimeError(
+                    "STORAGE_BACKEND=s3 requiere S3_BUCKET para incluir los documentos."
+                )
+            stats = archive_s3(archive)
+            manifest["storage"] = {
+                "source": f"s3://{settings.s3_bucket}/{settings.s3_prefix.strip('/')}",
+                "backend": "s3",
+                "file": archive.name,
+                "files": stats["files"],
+                "bytes": archive.stat().st_size,
+                "sha256": sha256_file(archive),
+            }
+        else:
+            files = archive_storage(storage_dir, archive)
+            manifest["storage"] = {
+                "source": str(storage_dir),
+                "backend": "local",
+                "file": archive.name,
+                "files": files,
+                "bytes": archive.stat().st_size,
+                "sha256": sha256_file(archive),
+            }
 
     (target / MANIFEST).write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
 
@@ -262,8 +314,39 @@ def restore_backup(
 
     storage_entry = manifest.get("storage") or {}
     if storage_entry:
-        extract_archive(Path(backup_dir) / storage_entry["file"], storage_dir.parent)
+        archive = Path(backup_dir) / storage_entry["file"]
+        if settings.storage_backend.strip().lower() == "s3":
+            if not settings.s3_configured:
+                raise RuntimeError(
+                    "STORAGE_BACKEND=s3 requiere S3_BUCKET para restaurar los documentos."
+                )
+            with tempfile.TemporaryDirectory(prefix="aurora-restore-") as temp:
+                extract_archive(archive, Path(temp))
+                root = Path(temp) / "storage"
+                for path in sorted(root.rglob("*")):
+                    if not path.is_file():
+                        continue
+                    relative = path.relative_to(root).as_posix()
+                    s3_storage.upload_path(
+                        path,
+                        relative,
+                        content_type=_guess_content_type(path),
+                        sha256=sha256_file(path),
+                    )
+        else:
+            extract_archive(archive, storage_dir.parent)
     return manifest
+
+
+def _guess_content_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    return {
+        ".pdf": "application/pdf",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }.get(suffix, "application/octet-stream")
 
 
 def extract_archive(archive_path: Path, destination: Path) -> None:

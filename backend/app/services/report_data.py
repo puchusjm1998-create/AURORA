@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Location, Pallet, Product, StockLevel, StockMovement, Warehouse
@@ -181,3 +181,280 @@ def table_csv_bytes(table: ReportTable) -> bytes:
     writer.writerow(table.headers)
     writer.writerows(table_as_csv_rows(table))
     return buffer.getvalue().encode("utf-8")
+
+
+INVOICE_HEADERS = [
+    "Número", "Proveedor", "Fecha", "Vencimiento", "Estado", "Origen",
+    "Moneda", "Base", "IVA", "Total", "Líneas", "Conciliada", "SHA-256",
+]
+INVOICE_FORMATS = {7: "money", 8: "money", 9: "money", 10: "int"}
+
+DELIVERY_HEADERS = [
+    "Referencia", "Estado", "Destino", "Dirección", "Vehículo", "Conductor",
+    "Salida prevista", "Salida real", "Entrega", "Palés", "Firma", "Creado",
+]
+DELIVERY_FORMATS = {9: "int"}
+
+EMPLOYEE_HEADERS = [
+    "Código", "Nombre", "Departamento", "Puesto", "Jornada semanal",
+    "Estado", "Alta", "Teléfono", "Usuario",
+]
+EMPLOYEE_FORMATS = {4: "money"}
+
+INVOICE_STATUS_LABELS = {
+    "received": "Recibida",
+    "in_review": "En revisión",
+    "reconciled": "Conciliada",
+    "discrepancy": "Con diferencias",
+}
+DELIVERY_STATUS_LABELS = {
+    "draft": "Borrador",
+    "preparing": "Preparando",
+    "ready": "Lista",
+    "loaded": "Cargada",
+    "in_transit": "En tránsito",
+    "delivered": "Entregada",
+    "failed": "Fallida",
+    "returned": "Devuelta",
+    "cancelled": "Cancelada",
+}
+EMPLOYEE_STATUS_LABELS = {
+    "active": "Activo",
+    "inactive": "Inactivo",
+    "on_leave": "Baja temporal",
+}
+
+
+def invoices_table(
+    db: Session,
+    date_from: date | None,
+    date_to: date | None,
+    status: str | None = None,
+) -> ReportTable:
+    from app.models import Invoice, InvoiceLine, Supplier
+
+    line_count = (
+        select(InvoiceLine.invoice_id, func.count(InvoiceLine.id).label("lines"))
+        .group_by(InvoiceLine.invoice_id)
+        .subquery()
+    )
+    stmt = (
+        select(
+            Invoice.number,
+            Supplier.name,
+            Invoice.invoice_date,
+            Invoice.due_date,
+            Invoice.status,
+            Invoice.source,
+            Invoice.currency,
+            Invoice.subtotal,
+            Invoice.tax_total,
+            Invoice.total,
+            func.coalesce(line_count.c.lines, 0),
+            Invoice.reconciled_at,
+            Invoice.file_sha256,
+        )
+        .outerjoin(Supplier, Supplier.id == Invoice.supplier_id)
+        .outerjoin(line_count, line_count.c.invoice_id == Invoice.id)
+    )
+    if date_from:
+        stmt = stmt.where(Invoice.invoice_date >= date_from)
+    if date_to:
+        stmt = stmt.where(Invoice.invoice_date <= date_to)
+    if status:
+        stmt = stmt.where(Invoice.status == status)
+    rows = db.execute(stmt.order_by(Invoice.invoice_date.desc(), Invoice.number)).all()
+
+    data: list[list] = []
+    total_base = total_tax = total_total = Decimal("0")
+    for (
+        number, supplier, issued, due, state, source, currency,
+        subtotal, tax, total, lines, reconciled, digest,
+    ) in rows:
+        base = Decimal(str(subtotal))
+        tax_value = Decimal(str(tax))
+        total_value = Decimal(str(total))
+        total_base += base
+        total_tax += tax_value
+        total_total += total_value
+        data.append(
+            [
+                number,
+                supplier or "Sin proveedor",
+                issued,
+                due or "",
+                INVOICE_STATUS_LABELS.get(str(state), str(state)),
+                "Subida" if str(source) == "upload" else "Manual",
+                currency,
+                base,
+                tax_value,
+                total_value,
+                int(lines or 0),
+                "Sí" if reconciled else "No",
+                digest or "",
+            ]
+        )
+    period = _period_label(date_from, date_to)
+    return ReportTable(
+        title="Facturación y conciliaciones",
+        subtitle="Facturas recibidas, importes, estado de revisión y conciliación.",
+        headers=INVOICE_HEADERS,
+        rows=data,
+        formats=INVOICE_FORMATS,
+        totals=[
+            "Total", "", "", "", "", "", "",
+            total_base, total_tax, total_total, "", "", "",
+        ],
+        meta=[
+            ("Periodo de factura", period),
+            ("Estado", INVOICE_STATUS_LABELS.get(status or "", "Todos")),
+            ("Facturas", str(len(data))),
+        ],
+        sheet_name="Facturas",
+    )
+
+
+def deliveries_table(
+    db: Session,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    status: str | None = None,
+) -> ReportTable:
+    from app.models import Delivery, DeliveryPallet, DeliverySignature, Employee, Vehicle
+
+    pallet_count = (
+        select(
+            DeliveryPallet.delivery_id,
+            func.count(DeliveryPallet.id).label("pallets"),
+        )
+        .group_by(DeliveryPallet.delivery_id)
+        .subquery()
+    )
+    signature_count = (
+        select(
+            DeliverySignature.delivery_id,
+            func.count(DeliverySignature.id).label("signatures"),
+        )
+        .group_by(DeliverySignature.delivery_id)
+        .subquery()
+    )
+    stmt = (
+        select(
+            Delivery.reference,
+            Delivery.status,
+            Delivery.destination_name,
+            Delivery.destination_address,
+            Vehicle.plate,
+            Employee.first_name,
+            Employee.last_name,
+            Delivery.planned_departure,
+            Delivery.departed_at,
+            Delivery.delivered_at,
+            func.coalesce(pallet_count.c.pallets, 0),
+            func.coalesce(signature_count.c.signatures, 0),
+            Delivery.created_at,
+        )
+        .outerjoin(Vehicle, Vehicle.id == Delivery.vehicle_id)
+        .outerjoin(Employee, Employee.id == Delivery.driver_employee_id)
+        .outerjoin(pallet_count, pallet_count.c.delivery_id == Delivery.id)
+        .outerjoin(signature_count, signature_count.c.delivery_id == Delivery.id)
+    )
+    if date_from:
+        stmt = stmt.where(Delivery.created_at >= date_from)
+    if date_to:
+        stmt = stmt.where(Delivery.created_at <= date_to)
+    if status:
+        stmt = stmt.where(Delivery.status == status)
+    rows = db.execute(stmt.order_by(Delivery.created_at.desc())).all()
+
+    data = [
+        [
+            reference,
+            DELIVERY_STATUS_LABELS.get(str(state), str(state)),
+            destination,
+            address or "",
+            plate or "",
+            " ".join(part for part in (first, last) if part) or "",
+            planned or "",
+            departed or "",
+            delivered or "",
+            int(pallets or 0),
+            "Sí" if signatures else "No",
+            created,
+        ]
+        for (
+            reference, state, destination, address, plate, first, last,
+            planned, departed, delivered, pallets, signatures, created,
+        ) in rows
+    ]
+    return ReportTable(
+        title="Repartos y entregas",
+        subtitle="Expediciones, conductor, vehículo, palés, firma y estado de entrega.",
+        headers=DELIVERY_HEADERS,
+        rows=data,
+        formats=DELIVERY_FORMATS,
+        meta=[
+            ("Periodo de creación", _period_label(date_from, date_to)),
+            ("Estado", DELIVERY_STATUS_LABELS.get(status or "", "Todos")),
+            ("Repartos", str(len(data))),
+        ],
+        sheet_name="Repartos",
+    )
+
+
+def employees_table(db: Session, active_only: bool = False) -> ReportTable:
+    from app.models import Employee, User
+
+    stmt = select(
+        Employee.code,
+        Employee.first_name,
+        Employee.last_name,
+        Employee.department,
+        Employee.position,
+        Employee.weekly_hours,
+        Employee.status,
+        Employee.hire_date,
+        Employee.phone,
+        User.email,
+    ).outerjoin(User, User.id == Employee.user_id)
+    if active_only:
+        stmt = stmt.where(Employee.status == "active")
+    rows = db.execute(stmt.order_by(Employee.last_name, Employee.first_name)).all()
+    data = [
+        [
+            code,
+            f"{first} {last}".strip(),
+            department or "",
+            position or "",
+            Decimal(str(hours)),
+            EMPLOYEE_STATUS_LABELS.get(str(state), str(state)),
+            hired or "",
+            phone or "",
+            email or "",
+        ]
+        for code, first, last, department, position, hours, state, hired, phone, email in rows
+    ]
+    total_hours = sum((Decimal(str(row[4])) for row in data), Decimal("0"))
+    return ReportTable(
+        title="Plantilla y jornada",
+        subtitle="Trabajadores, puesto, contrato semanal, estado y cuenta vinculada.",
+        headers=EMPLOYEE_HEADERS,
+        rows=data,
+        formats=EMPLOYEE_FORMATS,
+        totals=["Total", "", "", "", total_hours, "", "", "", ""],
+        meta=[
+            ("Solo activos", "Sí" if active_only else "No"),
+            ("Trabajadores", str(len(data))),
+        ],
+        sheet_name="Plantilla",
+    )
+
+
+def _period_label(
+    date_from: date | datetime | None, date_to: date | datetime | None
+) -> str:
+    if not date_from and not date_to:
+        return "Sin límite"
+    start = date_from.strftime("%d/%m/%Y") if date_from else "inicio"
+    finish = date_to.strftime("%d/%m/%Y") if date_to else "hoy"
+    return f"{start} – {finish}"

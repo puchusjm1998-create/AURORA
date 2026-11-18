@@ -240,9 +240,11 @@ base real antes de producción.
 
 ### 5.1 Copia verificable con `scripts/backup.py`
 
-El script empaqueta en `backups/aurora-<fecha>-<etiqueta>/` la base de datos, el volumen de
-documentos y un `manifest.json` con tamaños y SHA-256 de cada fichero. Con SQLite usa la API de
-backup del motor (copia consistente con la base en uso); con PostgreSQL ejecuta `pg_dump -Fc`.
+El script empaqueta en `backups/aurora-<fecha>-<etiqueta>/` la base de datos, los documentos y un
+`manifest.json` con tamaños y SHA-256 de cada fichero. Con SQLite usa la API de backup del motor
+(copia consistente con la base en uso); con PostgreSQL ejecuta `pg_dump -Fc`. Con
+`STORAGE_BACKEND=s3` descarga todos los objetos del bucket al tar; la restauración los vuelve a
+subir con la misma clave, tipo MIME y SHA-256.
 
 ```bash
 cd backend
@@ -275,7 +277,23 @@ docker compose start api
 El script rechaza rutas inseguras dentro del tar y conserva la base anterior solo si se copia a
 mano antes: haga siempre una copia del estado actual antes de restaurar.
 
-### 5.3 Copia manual equivalente (sin el script)
+### 5.3 Migrar documentos locales a S3
+
+Antes de cambiar `STORAGE_BACKEND` a `s3`, suba los documentos existentes. El script es idempotente:
+compara tamaño y SHA-256 con los metadatos del objeto y no vuelve a subir lo que ya coincide.
+
+```bash
+cd backend
+export STORAGE_BACKEND=s3 S3_BUCKET=aurora-docs S3_ENDPOINT_URL=... S3_PREFIX=aurora
+../.venv/bin/python -m scripts.storage_migrate --dry-run
+../.venv/bin/python -m scripts.storage_migrate
+```
+
+No borra el directorio local ni modifica la base de datos: las claves relativas no cambian. Si la
+verificación de un fichero falla, sale con código 1 y deja el original intacto. Mantenga el volumen
+local como copia hasta comprobar `/system/storage`, la descarga de una factura y una firma.
+
+### 5.4 Copia manual equivalente (sin el script)
 
 **Base de datos**
 
@@ -307,7 +325,8 @@ guarda nada fuera de sus volúmenes.
 ## 6. Monitorización y operación
 
 - `GET /healthz` — liveness para el balanceador (sin base de datos).
-- `GET /api/v1/system/health` — comprueba base de datos y almacenamiento.
+- `GET /api/v1/system/health` — comprueba la base de datos.
+- `GET /api/v1/system/storage` y `/system/queue` — S3, Redis y worker en tiempo real.
 - `X-Request-ID` en cada respuesta; los errores 5xx registran el mismo identificador en el log.
 - Auditoría en `/auditoria` (nivel 1, 2 o auditor) y por SQL para investigaciones.
 - Logs de la aplicación en JSON/lineal según el driver; envíe a su agregador (Loki, CloudWatch…).

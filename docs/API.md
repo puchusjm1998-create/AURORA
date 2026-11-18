@@ -370,6 +370,19 @@ desactivar la propia cuenta.
 | GET | `/reports/movements.csv` | Libro de movimientos (`date_from`, `date_to`) |
 | GET | `/reports/movements.pdf` | Movimientos en PDF paginado (máximo 4.000 filas maquetadas) |
 | GET | `/reports/movements.xlsx` | Movimientos en Excel nativo, fechas y cantidades numéricas |
+| GET | `/reports/invoices.csv` | Facturación (`date_from`, `date_to`, `status`) |
+| GET | `/reports/invoices.pdf` | Facturación en PDF con importes, estado y conciliación |
+| GET | `/reports/invoices.xlsx` | Facturación en Excel con hoja Resumen y totales |
+| GET | `/reports/deliveries.csv` | Repartos (`date_from`, `date_to`, `status`) con destino, conductor y firma |
+| GET | `/reports/deliveries.pdf` | Repartos en PDF paginado |
+| GET | `/reports/deliveries.xlsx` | Repartos en Excel nativo |
+| GET | `/reports/employees.csv` | Plantilla (`active_only`): puesto, jornada, estado y cuenta |
+| GET | `/reports/employees.pdf` | Plantilla en PDF |
+| GET | `/reports/employees.xlsx` | Plantilla en Excel con total de jornada semanal |
+
+Los filtros de fecha de facturas usan `invoice_date` (formato `AAAA-MM-DD`); los de repartos,
+`created_at` en ISO-8601 UTC. Todos los informes requieren `reports.export`. El CSV incluye BOM y
+separador `;`; PDF y Excel comparten los datos y el formato español de números y fechas.
 
 ### Informes programados
 

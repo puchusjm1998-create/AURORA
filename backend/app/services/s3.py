@@ -156,3 +156,81 @@ def status() -> dict[str, object]:
     except (BotoCoreError, ClientError) as exc:
         result["error"] = str(exc)[:300]
     return result
+
+
+def iter_objects(prefix: str = "") -> list[tuple[str, int]]:
+    """Lista ``(clave, tamaño)`` bajo el prefijo lógico, paginando la API S3."""
+    settings = get_settings()
+    client = _client()
+    logical_prefix = prefix.strip("/")
+    search = object_key(logical_prefix) if logical_prefix else settings.s3_prefix.strip().strip("/")
+    if search and not search.endswith("/"):
+        search += "/"
+    paginator = client.get_paginator("list_objects_v2")
+    found: list[tuple[str, int]] = []
+    for page in paginator.paginate(Bucket=settings.s3_bucket, Prefix=search):
+        for item in page.get("Contents", []):
+            found.append((str(item["Key"]), int(item.get("Size", 0))))
+    return found
+
+
+def download_bytes(relative_path: str) -> bytes:
+    settings = get_settings()
+    try:
+        response = _client().get_object(
+            Bucket=settings.s3_bucket, Key=object_key(relative_path)
+        )
+        return response["Body"].read()
+    except ClientError as exc:
+        code = getattr(exc, "response", {}).get("Error", {}).get("Code", "")
+        if code in _MISSING_CODES:
+            raise AppError(
+                "El documento original no se encuentra en el almacenamiento S3.",
+                status_code=404,
+                code="file_missing",
+            ) from exc
+        raise AppError(
+            "No se pudo leer el documento desde S3.",
+            status_code=503,
+            code="storage_unavailable",
+            details={"error": str(exc)[:300]},
+        ) from exc
+    except BotoCoreError as exc:
+        raise AppError(
+            "No se pudo leer el documento desde S3.",
+            status_code=503,
+            code="storage_unavailable",
+            details={"error": str(exc)[:300]},
+        ) from exc
+
+
+def head(relative_path: str) -> dict[str, object] | None:
+    """Metadatos mínimos de un objeto, o ``None`` si no existe."""
+    settings = get_settings()
+    try:
+        response = _client().head_object(
+            Bucket=settings.s3_bucket, Key=object_key(relative_path)
+        )
+        metadata = response.get("Metadata") or {}
+        return {
+            "size": int(response.get("ContentLength", 0)),
+            "sha256": str(metadata.get("sha256", "")),
+            "content_type": response.get("ContentType", ""),
+        }
+    except ClientError as exc:
+        code = getattr(exc, "response", {}).get("Error", {}).get("Code", "")
+        if code in _MISSING_CODES or code == "NoSuchKey":
+            return None
+        raise AppError(
+            "No se pudieron consultar los metadatos en S3.",
+            status_code=503,
+            code="storage_unavailable",
+            details={"error": str(exc)[:300]},
+        ) from exc
+    except BotoCoreError as exc:
+        raise AppError(
+            "No se pudieron consultar los metadatos en S3.",
+            status_code=503,
+            code="storage_unavailable",
+            details={"error": str(exc)[:300]},
+        ) from exc

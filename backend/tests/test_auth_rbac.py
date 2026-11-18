@@ -140,6 +140,8 @@ def test_roles_catalog_and_system_info(admin_client, worker_client):
     assert any("S3" in item for item in payload["implemented"])
     assert any("Celery" in item for item in payload["implemented"])
     assert any("Piper" in item for item in payload["implemented"])
+    assert any("facturación" in item for item in payload["implemented"])
+    assert any("migración local" in item for item in payload["implemented"])
     assert not any("lectores NFC" in item.lower() for item in payload["pending"])
 
     assert worker_client.get("/api/v1/roles").status_code == 403

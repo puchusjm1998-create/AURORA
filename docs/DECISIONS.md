@@ -656,3 +656,25 @@ se comparó formalmente con Edge/OpenAI. La descarga inicial es de 180 MB (bundl
 61 MB; el despliegue necesita ese espacio y el volumen `aurora-models`. Piper no está disponible en
 todos los entornos sin `onnxruntime`; en ese caso `/voice/status` lo declara y no se finge audio.
 El texto sintetizado no se guarda, solo el hash de la caché.
+
+---
+
+## D-47 · Informes de negocio y copias S3 de ida y vuelta
+
+**Decisión.** Facturación, repartos y plantilla usan el mismo `ReportTable` que inventario y
+movimientos, de modo que CSV, PDF y Excel salen de una única consulta y comparten formatos,
+totales y permisos (`reports.export`). Las copias de seguridad detectan `STORAGE_BACKEND=s3`,
+descargan el bucket a `storage.tar.gz` y la restauración vuelve a subir cada objeto con su clave,
+tipo MIME y SHA-256. La migración local → S3 compara tamaño y hash con los metadatos antes de
+subir y verifica descargando el objeto.
+
+**Por qué.** Un informe solo de pantalla obliga a copiar datos a mano y no sirve para contabilidad.
+Una copia que ignora S3 daría una falsa sensación de seguridad: el manifiesto sería correcto pero
+los documentos no estarían dentro. Mantener una sola tabla de datos evita que PDF y Excel
+discrepen.
+
+**Límites.** La copia S3 recorre el bucket completo y descarga cada objeto; con volúmenes grandes
+debe ejecutarse en una ventana de baja actividad y el tar resultante ocupa lo mismo que los
+documentos. No se copia el modelo Piper ni la caché (reconstruibles). La migración no borra los
+originales locales y no reescribe URLs: si un objeto se borra del bucket, la copia local no se usa
+automáticamente. Los informes de incidencias y auditoría siguen siendo solo de pantalla.

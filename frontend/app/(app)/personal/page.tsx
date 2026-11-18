@@ -40,6 +40,7 @@ const EMPTY_EMPLOYEE = {
   status: "active",
   hire_date: "",
   phone: "",
+  weekly_hours: "40",
 };
 
 export default function PeoplePage() {
@@ -100,6 +101,7 @@ export default function PeoplePage() {
       status: employee.status,
       hire_date: employee.hire_date ?? "",
       phone: employee.phone ?? "",
+      weekly_hours: String(employee.weekly_hours ?? "40"),
     });
     setError(null);
     setEmployeeOpen(true);
@@ -110,7 +112,12 @@ export default function PeoplePage() {
     setBusy(true);
     setError(null);
     try {
-      const body = { ...empForm, hire_date: empForm.hire_date || null, phone: empForm.phone || null };
+      const body = {
+        ...empForm,
+        hire_date: empForm.hire_date || null,
+        phone: empForm.phone || null,
+        weekly_hours: Number(empForm.weekly_hours.replace(",", ".")) || 40,
+      };
       if (editing) {
         await api(`/api/v1/employees/${editing.id}`, { method: "PATCH", body });
         toast.success("Trabajador actualizado", `${empForm.first_name} ${empForm.last_name}`);
@@ -310,6 +317,7 @@ export default function PeoplePage() {
                         <th>Trabajador</th>
                         <th>Departamento</th>
                         <th>Puesto</th>
+                        <th className="num">Jornada</th>
                         <th>Alta</th>
                         <th>Estado</th>
                         <th>Acceso</th>
@@ -335,6 +343,7 @@ export default function PeoplePage() {
                             </td>
                             <td className="small">{employee.department || "—"}</td>
                             <td className="small">{employee.position || "—"}</td>
+                            <td className="num small">{employee.weekly_hours ?? "40"} h</td>
                             <td className="small nowrap">{employee.hire_date ? fmtDate(employee.hire_date) : "—"}</td>
                             <td><Badge tone={meta.tone as "success"}>{meta.label}</Badge></td>
                             <td>
@@ -511,6 +520,14 @@ export default function PeoplePage() {
           </Field>
           <Field label="Teléfono">
             <input className="input" value={empForm.phone} onChange={(event) => setEmpForm({ ...empForm, phone: event.target.value })} />
+          </Field>
+          <Field label="Jornada semanal" hint="Horas de contrato; base de la bolsa de horas">
+            <input
+              className="input"
+              inputMode="decimal"
+              value={empForm.weekly_hours}
+              onChange={(event) => setEmpForm({ ...empForm, weekly_hours: event.target.value })}
+            />
           </Field>
           <Field label="Estado" className="full">
             <select className="select" value={empForm.status} onChange={(event) => setEmpForm({ ...empForm, status: event.target.value })}>

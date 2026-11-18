@@ -24,6 +24,7 @@ psycopg[binary]>=3.2,<4
 rapidocr-onnxruntime==1.4.4
 opencv-python-headless==5.1.0.95
 pymupdf==2.1.0
+pypdf==7.1.0
 
 # Pruebas
 pytest==9.2.0

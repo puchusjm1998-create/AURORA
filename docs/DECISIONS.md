@@ -451,3 +451,47 @@ hay bolsa de horas, fichaje NFC ni firma de turno. Un turno no cruza medianoche 
 horario invertido). Los cambios de días no se aplican si dejarían asignaciones huérfanas: hay que
 retirarlas primero. La cobertura es informativa: el sistema avisa del hueco, no bloqueaguardar el
 plan.
+
+
+---
+
+## D-37 · Tarjeta NFC como token opaco con hash en servidor
+
+**Decisión.** Una tarjeta NFC es un token aleatorio (`AUR-NFC-…`, generado con `secrets`) asociado
+a un único empleado. En la base de datos solo se guarda su SHA-256 y los últimos cuatro caracteres;
+el token completo se devuelve **una sola vez** al emitirlo. Una tarjeta activa por empleado; para
+sustituirla hay que revocarla. La lectura (`POST /nfc/tap`) valida el token, el estado de la
+tarjeta y del empleado, y aplica las mismas reglas de secuencia que el fichaje web. El fichaje
+queda con `source="nfc"` y etiqueta del lector.
+
+**Por qué.** Un identificador de tarjeta legible no es un secreto; guardar el token en claro
+permitiría fichar por cualquiera con acceso a la base de datos o a una copia de seguridad. El hash
+hace que una copia filtrada no sirva para fichar. Mostrar el token una sola vez evita que quede en
+pantallas, listados o registros de auditoría. Revocar en lugar de borrar conserva la trazabilidad.
+
+**Límites.** El token se transmite al lector o al trabajador por un canal que el sistema no
+controla; no hay criptografía en hardware ni atestación de tarjeta. No se escriben etiquetas NFC
+desde el navegador ni se integra un lector USB: la API está probada con el token, pero la lectura
+física queda pendiente. Una tarjeta perdida puede fichar hasta que un responsable la revoque. El
+token no caduca por tiempo; se rota revocando y emitiendo otra.
+
+---
+
+## D-38 · Bolsa de horas calculada, nunca almacenada
+
+**Decisión.** El saldo se calcula al consultar: tiempo fichado en el periodo menos la jornada
+teórica del contrato (`employees.weekly_hours` prorrateada por días del periodo) más los ajustes
+manuales. Los ajustes tienen fecha efectiva, minutos distintos de cero y motivo obligatorio, y se
+auditan al crear y eliminar. Los fichajes no se editan: una corrección es un fichaje nuevo. El
+periodo máximo es de 93 días y el saldo puede ser negativo (horas pendientes de compensar).
+
+**Por qué.** Un saldo almacenado se desincroniza en cuanto se corrige un fichaje o cambia el
+contrato. Calcularlo sobre el histórico inmutable hace que cualquier consulta sea reproducible y
+auditable. Separar los ajustes permite justificar compensaciones sin falsear el fichaje. El
+prorrateo por días evita comparar un periodo parcial contra una semana completa.
+
+**Límites.** El contrato semanal es un único número por empleado; no hay calendario laboral,
+vacaciones, festivos ni turnos rotativos que ajusten la jornada teórica. El prorrateo es lineal
+(`weekly_hours × días / 7`), por lo que un festivo no se descuenta automáticamente. Los ajustes
+los introduce un responsable con `attendance.manage`; no hay flujo de aprobación del trabajador.
+El saldo no genera nómina ni pago: es un indicador operativo.

@@ -253,6 +253,14 @@ export const incidentTypeMeta: Record<string, { tone: string; label: string }> =
   other: { tone: "neutral", label: "Otra" },
 };
 
+export function fmtSignedMinutes(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined || Number.isNaN(minutes)) return "—";
+  const rounded = Math.round(minutes);
+  if (rounded === 0) return "0 min";
+  const sign = rounded > 0 ? "+" : "−";
+  return `${sign}${fmtMinutes(Math.abs(rounded))}`;
+}
+
 export function fmtMinutes(minutes: number | null | undefined): string {
   if (minutes === null || minutes === undefined || Number.isNaN(minutes)) return "—";
   const safe = Math.max(0, Math.round(minutes));

@@ -43,6 +43,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from app.core.enums import (
     AlertMetric,
     CalibrationMethod,
+    NfcCardStatus,
     AlertOperator,
     AlertSeverity,
     AlertStatus,
@@ -202,6 +203,9 @@ class Employee(Base, TimestampMixin):
     last_name: Mapped[str] = mapped_column(String(120), nullable=False)
     department: Mapped[str] = mapped_column(String(80), default="", nullable=False)
     position: Mapped[str] = mapped_column(String(80), default="", nullable=False)
+    weekly_hours: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), default=Decimal("40"), server_default="40", nullable=False
+    )
     status: Mapped[EmployeeStatus] = mapped_column(
         enum_column(EmployeeStatus, "employee_status"), default=EmployeeStatus.ACTIVE, nullable=False
     )
@@ -1077,4 +1081,54 @@ class ShiftAssignment(Base, TimestampMixin):
 
     __table_args__ = (
         UniqueConstraint("shift_id", "employee_id", "work_date", name="uq_shift_employee_date"),
+    )
+
+
+class NfcCard(Base, TimestampMixin):
+    """Tarjeta NFC emitida por AURORA; solo se guarda el hash del token."""
+
+    __tablename__ = "nfc_cards"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    employee_id: Mapped[str] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    label: Mapped[str] = mapped_column(String(80), default="", nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    token_last4: Mapped[str] = mapped_column(String(8), default="", nullable=False)
+    status: Mapped[NfcCardStatus] = mapped_column(
+        enum_column(NfcCardStatus, "nfc_card_status"),
+        default=NfcCardStatus.ACTIVE,
+        nullable=False,
+    )
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    revoked_by: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_by: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+    employee: Mapped["Employee"] = relationship(lazy="joined")
+    creator: Mapped[Optional["User"]] = relationship(foreign_keys=[created_by], lazy="joined")
+    revoker: Mapped[Optional["User"]] = relationship(foreign_keys=[revoked_by], lazy="joined")
+
+
+class HoursBankAdjustment(Base, TimestampMixin):
+    """Ajuste manual de la bolsa de horas, con motivo y auditoría."""
+
+    __tablename__ = "hours_bank_adjustments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    employee_id: Mapped[str] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    effective_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_by: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+    employee: Mapped["Employee"] = relationship(lazy="joined")
+    creator: Mapped[Optional["User"]] = relationship(foreign_keys=[created_by], lazy="joined")
+
+    __table_args__ = (
+        CheckConstraint("minutes <> 0", name="ck_hours_adjustment_non_zero"),
+        CheckConstraint("minutes BETWEEN -100000 AND 100000", name="ck_hours_adjustment_range"),
     )

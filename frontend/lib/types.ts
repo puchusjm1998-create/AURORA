@@ -66,6 +66,7 @@ export interface Employee {
   status: "active" | "leave" | "inactive";
   hire_date: string | null;
   phone: string | null;
+  weekly_hours: Decimal;
   user_id: string | null;
   created_at: string;
 }
@@ -930,4 +931,74 @@ export interface ShiftPlan {
   days: ShiftDayPlan[];
   total_assignments: number;
   uncovered_shifts: number;
+}
+
+
+/* Fase 7 — tarjetas NFC y bolsa de horas */
+export type NfcCardStatus = "active" | "revoked";
+
+export interface NfcCard {
+  id: string;
+  employee_id: string;
+  employee_code: string;
+  employee_name: string;
+  label: string;
+  token_last4: string;
+  status: NfcCardStatus;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+export interface NfcCardIssued extends NfcCard {
+  token: string;
+  warning: string;
+}
+
+export interface NfcTapResult {
+  card_id: string;
+  card_label: string;
+  employee: EmployeeBrief;
+  event_type: AttendanceEventType;
+  event_label: string;
+  occurred_at: string;
+  state: "out" | "in" | "break";
+  message: string;
+}
+
+export interface HoursBankEmployee {
+  employee_id: string;
+  employee_code: string;
+  employee_name: string;
+  weekly_hours: Decimal;
+  worked_minutes: number;
+  contracted_minutes: number;
+  adjustments_minutes: number;
+  balance_minutes: number;
+  days_worked: number;
+}
+
+export interface HoursBankTotals {
+  worked_minutes: number;
+  contracted_minutes: number;
+  adjustments_minutes: number;
+  balance_minutes: number;
+}
+
+export interface HoursBankSummary {
+  date_from: string;
+  date_to: string;
+  items: HoursBankEmployee[];
+  totals: HoursBankTotals;
+}
+
+export interface HoursBankAdjustment {
+  id: string;
+  employee_id: string;
+  employee_code: string;
+  employee_name: string;
+  effective_date: string;
+  minutes: number;
+  reason: string;
+  created_at: string;
 }

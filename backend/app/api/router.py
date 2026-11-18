@@ -19,9 +19,11 @@ from app.api.routes import (
     system,
     attendance,
     deliveries,
+    hours_bank,
     incidents,
     optimization,
     tasks,
+    nfc,
     warehouses,
 )
 
@@ -45,4 +47,6 @@ api_router.include_router(report_schedules.router)
 api_router.include_router(alerts.router)
 api_router.include_router(voice.router)
 api_router.include_router(shifts.router)
+api_router.include_router(nfc.router)
+api_router.include_router(hours_bank.router)
 api_router.include_router(labels.router)

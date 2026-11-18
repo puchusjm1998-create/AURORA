@@ -27,6 +27,8 @@ from app.core.enums import (
     MovementStatus,
     MovementType,
     PalletStatus,
+    NfcCardStatus,
+    NfcTapAction,
     ReportFormat,
     ReportKind,
     ReservationStatus,
@@ -166,6 +168,7 @@ class EmployeeCreate(BaseModel):
     status: EmployeeStatus = EmployeeStatus.ACTIVE
     hire_date: Optional[date] = None
     phone: Optional[str] = None
+    weekly_hours: Decimal = Field(default=Decimal("40"), gt=0, le=60)
 
 
 class EmployeeUpdate(BaseModel):
@@ -176,6 +179,7 @@ class EmployeeUpdate(BaseModel):
     status: Optional[EmployeeStatus] = None
     hire_date: Optional[date] = None
     phone: Optional[str] = None
+    weekly_hours: Optional[Decimal] = Field(default=None, gt=0, le=60)
 
 
 class EmployeeRead(ORMBase):
@@ -187,6 +191,7 @@ class EmployeeRead(ORMBase):
     status: EmployeeStatus
     hire_date: Optional[date] = None
     phone: Optional[str] = None
+    weekly_hours: Decimal
     user_id: Optional[str] = None
     created_at: UtcDateTime
 
@@ -1401,3 +1406,97 @@ class VoiceResponse(BaseModel):
     provider: str
     data: dict[str, Any] = {}
     suggestions: list[str] = []
+
+
+# ---------------------------------------------------------------------------
+# Phase 7 – NFC cards and hours bank
+# ---------------------------------------------------------------------------
+class NfcCardCreate(BaseModel):
+    employee_id: str
+    label: str = Field(default="", max_length=80)
+
+
+class NfcCardRead(ORMBase):
+    id: str
+    employee_id: str
+    employee_code: str
+    employee_name: str
+    label: str
+    token_last4: str
+    status: NfcCardStatus
+    last_used_at: Optional[UtcDateTime] = None
+    revoked_at: Optional[UtcDateTime] = None
+    created_at: UtcDateTime
+
+
+class NfcCardIssued(NfcCardRead):
+    token: str
+    warning: str = "Guarde este token ahora: no volverá a mostrarse."
+
+
+class NfcTapRequest(BaseModel):
+    token: str = Field(min_length=8, max_length=200)
+    action: NfcTapAction = NfcTapAction.AUTO
+    note: str = Field(default="", max_length=255)
+
+
+class NfcTapRead(BaseModel):
+    card_id: str
+    card_label: str
+    employee: EmployeeBrief
+    event_type: AttendanceEventType
+    event_label: str
+    occurred_at: UtcDateTime
+    state: Literal["out", "in", "break"]
+    message: str
+
+
+class HoursBankAdjustmentCreate(BaseModel):
+    employee_id: str
+    effective_date: date
+    minutes: int = Field(ge=-600, le=600)
+    reason: str = Field(min_length=3, max_length=255)
+
+    @field_validator("minutes")
+    @classmethod
+    def _non_zero(cls, value: int) -> int:
+        if value == 0:
+            raise ValueError("El ajuste no puede ser de cero minutos.")
+        return value
+
+
+class HoursBankAdjustmentRead(ORMBase):
+    id: str
+    employee_id: str
+    employee_code: str
+    employee_name: str
+    effective_date: date
+    minutes: int
+    reason: str
+    created_at: UtcDateTime
+
+
+class HoursBankEmployee(BaseModel):
+    employee_id: str
+    employee_code: str
+    employee_name: str
+    weekly_hours: Decimal
+    worked_minutes: int
+    contracted_minutes: int
+    adjustments_minutes: int
+    balance_minutes: int
+    days_worked: int
+
+
+class HoursBankTotals(BaseModel):
+    worked_minutes: int
+    contracted_minutes: int
+    adjustments_minutes: int
+    balance_minutes: int
+
+
+class HoursBankSummary(BaseModel):
+    date_from: date
+    date_to: date
+    items: list[HoursBankEmployee]
+    totals: HoursBankTotals

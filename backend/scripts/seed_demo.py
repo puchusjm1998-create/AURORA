@@ -38,6 +38,7 @@ from app.core.enums import (  # noqa: E402
     IncidentStatus,
     IncidentType,
     MovementType,
+    NfcCardStatus,
     PalletStatus,
     ReportFormat,
     ReportKind,
@@ -51,6 +52,8 @@ from app.core.timeutils import MADRID  # noqa: E402
 from app.db.triggers import install_immutability_triggers  # noqa: E402
 from app.models import (  # noqa: E402
     AlertRule,
+    HoursBankAdjustment,
+    NfcCard,
     ShiftAssignment,
     WarehouseCalibration,
     WorkShift,
@@ -74,6 +77,7 @@ from app.models import (  # noqa: E402
     Vehicle,
     Warehouse,
 )
+from app.services.nfc import issue_token  # noqa: E402
 from app.services.report_delivery import next_occurrence  # noqa: E402
 from app.services.sequences import next_code  # noqa: E402
 from app.services.stock import StockEngine  # noqa: E402
@@ -674,6 +678,42 @@ def build(args: argparse.Namespace) -> None:
         punch("encargado@aurora.demo", AttendanceEventType.CLOCK_IN, now_naive - timedelta(hours=3))
         db.commit()
 
+        # -- NFC cards and hours bank --------------------------------------
+        demo_token, demo_token_hash, demo_last4 = issue_token()
+        _, revoked_hash, revoked_last4 = issue_token()
+        db.add(
+            NfcCard(
+                employee_id=employees["operario@aurora.demo"].id,
+                label="Llavero demo (operario)",
+                token_hash=demo_token_hash,
+                token_last4=demo_last4,
+                status=NfcCardStatus.ACTIVE,
+                created_by=supervisor.id,
+            )
+        )
+        db.add(
+            NfcCard(
+                employee_id=employees["diego@aurora.demo"].id,
+                label="Tarjeta extraviada (revocada)",
+                token_hash=revoked_hash,
+                token_last4=revoked_last4,
+                status=NfcCardStatus.REVOKED,
+                revoked_at=now - timedelta(days=2),
+                revoked_by=supervisor.id,
+                created_by=supervisor.id,
+            )
+        )
+        db.add(
+            HoursBankAdjustment(
+                employee_id=employees["operario@aurora.demo"].id,
+                effective_date=yesterday_local,
+                minutes=45,
+                reason="Horas extra aprobadas en inventario de cierre",
+                created_by=supervisor.id,
+            )
+        )
+        db.commit()
+
         # -- Vehicles and deliveries ---------------------------------------
         vehicle_a = Vehicle(plate="1234 ABC", model="Iveco Daily 35S14", capacity_kg=Decimal("3500"))
         vehicle_b = Vehicle(plate="5678 DEF", model="Mercedes Sprinter 315", capacity_kg=Decimal("1400"))
@@ -854,6 +894,8 @@ def build(args: argparse.Namespace) -> None:
             ("Nivel 5 Auditor", "auditor@aurora.demo"),
         ]:
             print(f"  - {label}: {email}")
+        print("Tarjeta NFC de demo (operario@aurora.demo):", demo_token)
+        print("  Úsela en POST /api/v1/nfc/tap para fichar; solo se muestra aquí.")
         print("Base de datos:", settings.database_url)
         print("Estos datos NO son reales y deben permanecer aislados de producción.\n")
 

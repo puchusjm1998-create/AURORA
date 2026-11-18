@@ -62,6 +62,8 @@ const NAV: NavEntry[] = [
   { href: "/informes", label: "Informes", permission: "reports.read", icon: <IconReports />, group: "Gestión" },
   { href: "/personal", label: "Personal", permission: "workers.read", icon: <IconUsers />, group: "Gestión" },
   { href: "/turnos", label: "Turnos", permission: "workers.read", icon: <IconClock />, group: "Gestión" },
+  { href: "/tarjetas", label: "Tarjetas NFC", permission: "attendance.manage", icon: <IconQr />, group: "Gestión" },
+  { href: "/bolsa-horas", label: "Bolsa de horas", permission: "attendance.read", icon: <IconClock />, group: "Gestión" },
   { href: "/auditoria", label: "Auditoría", permission: "audit.read", icon: <IconShield />, group: "Gestión" },
 ];
 

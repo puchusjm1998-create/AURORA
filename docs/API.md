@@ -468,6 +468,42 @@ duplicados (409 `duplicate_assignment`) y solapes del mismo empleado (409 `shift
 El plan indica `assigned_count`, `missing` y `uncovered_shifts`; la cobertura se controla por
 plantilla y día, sin ocultar los huecos.
 
+## Tarjetas NFC
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/nfc/cards` | Lista tarjetas (`employee_id`, `status`, paginación); nunca devuelve el token |
+| POST | `/nfc/cards` | Emite una tarjeta (`attendance.manage`); el token se muestra una sola vez |
+| GET | `/nfc/cards/{id}` | Consulta una tarjeta sin token |
+| POST | `/nfc/cards/{id}/revoke` | Revoca la tarjeta; deja de fichar de inmediato |
+| DELETE | `/nfc/cards/{id}` | Elimina una tarjeta ya revocada |
+| POST | `/nfc/tap` | Ficha leyendo el token (`attendance.clock`); `action` = `auto`, `clock_in`, `clock_out`, `break_start` o `break_end` |
+| GET | `/nfc/state/{employee_id}` | Estado derivado (`out`/`in`/`break`) del trabajador |
+
+El token tiene el formato `AUR-NFC-…`; en la base de datos solo queda SHA-256 y los últimos cuatro
+caracteres. Hay una tarjeta activa por trabajador (409 `employee_has_active_card`). Una tarjeta
+revocada devuelve 409 `card_revoked`; un token desconocido, 404. `auto` elige la transición natural
+(entrada si está fuera, salida si trabaja, fin de pausa si está en pausa) y cualquier secuencia
+inválida devuelve 409 `invalid_sequence`. El trabajador de nivel 4 solo puede usar su propia
+tarjeta (403 si no). Cada lectura crea un fichaje append-only con `source="nfc"` y se audita.
+
+## Bolsa de horas
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/hours-bank` | Saldo por trabajador y totales (`date_from`, `date_to`, máx. 93 días) |
+| GET | `/hours-bank/me` | Saldo propio (cualquier usuario con `attendance.clock` y ficha) |
+| GET | `/hours-bank/adjustments` | Ajustes del periodo (`employee_id`, fechas) |
+| POST | `/hours-bank/adjustments` | Ajuste manual (`attendance.manage`), minutos ≠ 0 y motivo |
+| DELETE | `/hours-bank/adjustments/{id}` | Elimina un ajuste y audita el borrado |
+
+El saldo es `trabajado − teórico + ajustes`. El teórico usa `employees.weekly_hours` (40 por
+defecto, configurable al crear o modificar la ficha) prorrateado por los días del periodo dentro de
+cada semana. Un saldo positivo son horas a favor del trabajador; uno negativo, pendientes de
+compensar. Fechas invertidas devuelven 422 `invalid_range`; periodos de más de 93 días, 422
+`range_too_long`; ajustes a más de un mes en el futuro o de más de un año atrás, 409
+`invalid_effective_date`. Los fichajes no se modifican: los ajustes son la vía justificada.
+
 ## AURORA Voice
 
 | Método | Ruta | Descripción |

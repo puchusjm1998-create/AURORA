@@ -1,12 +1,12 @@
 # AURORA LOGISTICS AI
 
-Plataforma de gestión logística para almacenes de 10–50 trabajadores. Esta entrega cubre la
-**Fase 1, la primera entrega funcional completa, las Fases 2 y 3, el fichaje de jornada y la
-optimización de ubicaciones y repartos**: recepción → almacenamiento → localización → expedición,
-con inventario real, trazabilidad QR, palés, movimientos auditados, reservas de stock, tareas de
-almacén asignadas, incidencias con resolución trazable, fichaje con pausas y horas, sugerencias de
-ubicación y rutas de picking, repartos con vehículos y palés, facturas de proveedor, personal,
-informes y panel de control.
+Plataforma de gestión logística para almacenes de 10–50 trabajadores. Esta entrega cubre las
+**fases 1 a 7 y 9 a 14** del roadmap; la fase 8 (telefonía SIP/API, GPS de reparto y firma de
+entrega) sigue pendiente y se identifica como tal. El recorrido operativo es recepción →
+almacenamiento → localización → expedición, con inventario real, trazabilidad QR, palés,
+movimientos auditados, reservas, tareas, incidencias, fichaje con pausas, turnos, tarjetas NFC,
+bolsa de horas, calibración y rutas de picking, repartos, facturas, OCR, alertas, informes, voz y
+panel de control.
 
 El sistema no es una maqueta: la interfaz habla con una API FastAPI que persiste en base de datos,
 valida permisos en el servidor y registra cada operación en un libro de auditoría inmutable.
@@ -65,6 +65,8 @@ Además: facturas con documento original inmutable, conciliación, personal y cu
 | AURORA Voice | ✅ | `/voz` (dictado y lectura del navegador; respuestas con datos reales, sin audio fuera del dispositivo) |
 | Calibración del almacén | ✅ | `/optimizacion` (plano, tiempos cronometrados y regresión con R²/MAE) |
 | Turnos de trabajo | ✅ | `/turnos` (plantillas semanales, cobertura exigida, asignación y solapes) |
+| Tarjetas NFC para fichar | ✅ | `/tarjetas` (emisión, token mostrado una vez, revocación y lectura vía API) |
+| Bolsa de horas | ✅ | `/bolsa-horas` (saldo por contrato, trabajado y ajustes) y resumen propio en `/fichaje` |
 
 ### Lo que todavía no está implementado (y no se muestra como si lo estuviera)
 
@@ -77,12 +79,14 @@ las identifica explícitamente:
   estructura y SHA-256; el adaptador S3 queda pendiente.
 - **Redis/Celery** (Fase 4+): trabajos asíncronos (informes programados, notificaciones). Las
   tareas de almacén de la Fase 2 ya son reales, pero se ejecutan de forma síncrona.
-- **Telefonía SIP/API, GPS de repartos y firma digital de entrega** (Fase 8); **tarjetas NFC,
-  turnos planificados y bolsa de horas** (Fase 7). Los repartos ya expiden stock real.
+- **Telefonía SIP/API, GPS de repartos y firma digital de entrega** (Fase 8). Los repartos ya
+  expiden stock real y tienen estados, pero no geolocalización ni firma en la ficha.
 - **Notificaciones asíncronas** (Redis/Celery): las alertas y los informes ya se envían por SMTP,
   pero la evaluación corre en cron síncrono y no hay cola de trabajos.
-- **Bolsa de horas y turnos con firma NFC** (Fase 7): la planificación semanal ya es real y se
-  controlan solapes, pero no hay fichaje NFC ni cómputo de bolsa de horas.
+- **Lectura física de tarjetas NFC**: la API `POST /nfc/tap` y la emisión/revocación son reales y
+  están probadas, pero no se escriben etiquetas NFC desde el navegador ni se integra un lector USB;
+  el token debe entregarse al trabajador o lector por un canal seguro. La tarjeta es un token
+  opaco, no una tarjeta bancaria ni un certificado criptográfico en hardware.
 - **Medición automática de tiempos**: los cronometrajes se introducen desde la ruta calculada; no
   hay sensores ni lectores de presencia que midan recorridos sin intervención.
 
@@ -154,14 +158,14 @@ use otra `DATABASE_URL` y **no** ejecute el script de demostración.
 backend/
   app/
     core/          configuración, enums, RBAC, seguridad, errores, tiempo UTC/Madrid
-    models.py      33 tablas SQLAlchemy (inventario, palés, movimientos, facturas…)
+    models.py      43 tablas SQLAlchemy (inventario, palés, movimientos, facturas…)
     schemas.py     DTOs Pydantic y paginación
     api/           dependencias, serializadores y rutas /api/v1
-    services/      StockEngine, auditoría, secuencias, QR, almacenamiento
+    services/      StockEngine, auditoría, secuencias, QR, OCR, calibración, turnos, NFC y bolsa de horas
     db/            bootstrap, triggers de inmutabilidad
   alembic/         migraciones versionadas
   scripts/         seed_demo.py, backup.py, smoke_test.py y load_test.py
-  tests/           83 pruebas automatizadas
+  tests/           88 pruebas automatizadas
 frontend/
   app/             rutas App Router (login y área autenticada)
   components/      design system, shell, selectores, escáner QR
@@ -243,13 +247,14 @@ cd backend
 ../.venv/bin/python -m pytest tests -q
 ```
 
-Resultado actual: **83 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
+Resultado actual: **88 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
 etiquetas, escaneo, facturas, mapa del almacén, reservas —incluida su caducidad—, tareas de
 almacén, incidencias, fichaje —secuencias y resumen de horas—, optimización de ubicaciones y
 rutas, repartos con expedición de stock, informes, auditoría y herramientas de operación: copia
 con manifiesto SHA-256, retención y restauración, e informes PDF/Excel con contenido verificado, métricas Prometheus, envío SMTP con un servidor local de prueba, trazas OpenTelemetry, alertas
 gestionadas con evaluación, reconocimiento y notificación, OCR local sobre PDF e imagen y consultas
-de voz con permisos, calibración con regresión y planificación de turnos con solapes).
+de voz con permisos, calibración con regresión, planificación de turnos con solapes, tarjetas NFC con token de un solo
+uso y bolsa de horas con ajustes justificados).
 Las pruebas usan una base de datos SQLite
 temporal por ejecución; nunca tocan datos reales.
 

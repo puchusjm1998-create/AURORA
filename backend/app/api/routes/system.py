@@ -41,11 +41,15 @@ IMPLEMENTED = [
     "AURORA Voice: dictado y lectura en el navegador con consultas reales de stock, tareas y repartos",
     "Calibración del almacén con plano real y tiempos cronometrados, con ajuste por regresión",
     "Turnos de trabajo semanales con cobertura exigida, asignación y control de solapes",
+    "Tarjetas NFC con token opaco (solo hash SHA-256), emisión, revocación y fichaje por lectura",
+    "Bolsa de horas: saldo real por contrato semanal, fichajes y ajustes justificados auditados",
 ]
 
 PENDING = [
-    "Fase 7: tarjetas digitales NFC y bolsa de horas (los turnos ya están planificados)",
-    "Fase 8: integración telefónica SIP/API, seguimiento GPS y firma de entrega",
+    "Fase 8: integración telefónica SIP/API para llamadas reales",
+    "Fase 8: seguimiento GPS de repartos en tiempo real",
+    "Fase 8: firma digital de entrega en la ficha del reparto",
+    "Integración física de lectores NFC: la API de fichaje por token ya es real, pero no se escriben ni leen etiquetas desde el navegador",
 ]
 
 
@@ -58,7 +62,7 @@ def system_info() -> SystemInfo:
         demo_mode=settings.demo_mode,
         server_time_utc=utcnow().isoformat().replace("+00:00", "Z"),
         warehouse_timezone=settings.warehouse_timezone,
-        phase="Fases 1-6 y 9-14: operación completa, voz, OCR, alertas y turnos; quedan fases 7 y 8",
+        phase="Fases 1-7 y 9-14 completas: operación, voz, OCR, alertas, turnos, NFC y bolsa de horas; queda la fase 8",
         implemented=IMPLEMENTED,
         pending=PENDING,
     )

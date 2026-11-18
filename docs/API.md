@@ -537,13 +537,17 @@ incluye `X-Content-SHA256` y `Cache-Control: private, no-store`.
 | GET | `/calls/{id}` | Detalle con enlaces `tel:`, `sip:` y `dial_uri` |
 | POST | `/calls` | Registra la llamada y, en modo webhook, la envía al proveedor |
 | PATCH | `/calls/{id}` | `in_progress`, `completed` o `failed` con resultado |
+| POST | `/calls/callback` | Confirmación del proveedor (`X-Telephony-Token` o Bearer) |
 
 Requiere `calls.manage` (niveles 1-3). El teléfono se normaliza a dígitos con prefijo `+`
 opcional (7-15 dígitos; 422 `invalid_phone`). En modo `handoff` el servidor no llama: devuelve
 `tel:` y, si `TELEPHONY_SIP_DOMAIN` está definido, `sip:` para que el softphone del dispositivo
 abra la llamada. En modo `webhook` se envía `to`, `contact_name`, `purpose`, `reference` y
 `extension` al proveedor; sin URL se devuelve 503 `telephony_not_configured`. Un fallo del
-proveedor deja la llamada `failed`, auditada, y devuelve 502 `telephony_provider_error`. No se
+proveedor deja la llamada `failed`, auditada, y devuelve 502 `telephony_provider_error`. El
+callback acepta `reference` (ID interno) o `provider_call_id`, actualiza el estado y es idempotente
+si repite el mismo estado/resultado; una llamada ya cerrada con otro estado devuelve 409
+`call_closed`. Sin `TELEPHONY_CALLBACK_TOKEN` responde 503; con token incorrecto, 401. No se
 almacena audio ni se marca una llamada como completada sin confirmación o cierre humano.
 
 ## AURORA Voice

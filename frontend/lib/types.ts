@@ -1070,6 +1070,7 @@ export interface TelephonyStatus {
   sip_domain: string;
   sip_extension: string;
   webhook_configured: boolean;
+  callback_configured: boolean;
   can_originate: boolean;
   message: string;
 }

@@ -45,7 +45,7 @@ IMPLEMENTED = [
     "Bolsa de horas: saldo real por contrato semanal, fichajes y ajustes justificados auditados",
     "Seguimiento GPS de repartos con puntos append-only, distancia Haversine y antigüedad de la señal",
     "Firma digital de entrega en PNG con SHA-256, verificación de integridad y bloqueo de re-firma",
-    "Registro de llamadas con handoff tel:/sip: y adaptador webhook para proveedores telefónicos",
+    "Registro de llamadas con handoff tel:/sip:, adaptador webhook y callback firmado del proveedor",
 ]
 
 PENDING = [

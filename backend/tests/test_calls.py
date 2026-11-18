@@ -145,3 +145,69 @@ def test_webhook_originates_call_and_handles_provider_errors(admin_client, monke
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_provider_callback_updates_call_and_rejects_bad_token(admin_client, monkeypatch):
+    created = admin_client.post(
+        "/api/v1/calls",
+        json={"contact_name": "Cliente Callback", "phone": "968111222"},
+    )
+    assert created.status_code == 201
+    call = created.json()
+
+    unconfigured = admin_client.post(
+        "/api/v1/calls/callback",
+        json={"reference": call["id"], "status": "completed", "result": "Sin secreto"},
+    )
+    assert unconfigured.status_code == 503
+    assert unconfigured.json()["error"]["code"] == "telephony_callback_not_configured"
+
+    monkeypatch.setattr(calls_route.settings, "telephony_callback_token", "cb-secreto")
+    bad = admin_client.post(
+        "/api/v1/calls/callback",
+        json={"reference": call["id"], "status": "completed"},
+        headers={"X-Telephony-Token": "otro"},
+    )
+    assert bad.status_code == 401
+    assert bad.json()["error"]["code"] == "invalid_callback_token"
+
+    updated = admin_client.post(
+        "/api/v1/calls/callback",
+        json={
+            "reference": call["id"],
+            "status": "in_progress",
+            "result": "Llamada descolgada por el cliente",
+        },
+        headers={"Authorization": "Bearer cb-secreto"},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["status"] == "in_progress"
+
+    completed = admin_client.post(
+        "/api/v1/calls/callback",
+        json={"provider_call_id": "no-existe", "status": "completed"},
+        headers={"X-Telephony-Token": "cb-secreto"},
+    )
+    assert completed.status_code == 404
+
+    final = admin_client.post(
+        "/api/v1/calls/callback",
+        json={"reference": call["id"], "status": "completed", "result": "Confirmado"},
+        headers={"X-Telephony-Token": "cb-secreto"},
+    )
+    assert final.status_code == 200
+    assert final.json()["status"] == "completed"
+    assert final.json()["ended_at"] is not None
+
+    repeated = admin_client.post(
+        "/api/v1/calls/callback",
+        json={"reference": call["id"], "status": "completed", "result": "Confirmado"},
+        headers={"X-Telephony-Token": "cb-secreto"},
+    )
+    assert repeated.status_code == 200
+    conflict = admin_client.post(
+        "/api/v1/calls/callback",
+        json={"reference": call["id"], "status": "failed", "result": "Cambio tardío"},
+        headers={"X-Telephony-Token": "cb-secreto"},
+    )
+    assert conflict.status_code == 409

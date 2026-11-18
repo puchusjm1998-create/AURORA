@@ -16,9 +16,10 @@ lo confirma.
 from __future__ import annotations
 
 import re
+import secrets
 
 import httpx
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -30,6 +31,7 @@ from app.core.errors import AppError, ConflictError, NotFoundError, ValidationEr
 from app.core.timeutils import utcnow
 from app.models import CallRecord, Incident, User
 from app.schemas import (
+    CallCallback,
     CallCreate,
     CallRead,
     CallUpdate,
@@ -112,9 +114,82 @@ def telephony_status(
         sip_domain=settings.telephony_sip_domain.strip(),
         sip_extension=settings.telephony_sip_extension.strip(),
         webhook_configured=bool(settings.telephony_webhook_url.strip()),
+        callback_configured=bool(settings.telephony_callback_token.strip()),
         can_originate=settings.telephony_can_originate,
         message=message,
     )
+
+
+def _check_callback_token(authorization: str | None, x_telephony_token: str | None) -> None:
+    expected = settings.telephony_callback_token.strip()
+    if not expected:
+        raise AppError(
+            "El callback telefónico no está configurado (TELEPHONY_CALLBACK_TOKEN).",
+            status_code=503,
+            code="telephony_callback_not_configured",
+        )
+    supplied = (x_telephony_token or "").strip()
+    if not supplied and authorization and authorization.lower().startswith("bearer "):
+        supplied = authorization.split(" ", 1)[1].strip()
+    if not supplied or not secrets.compare_digest(supplied, expected):
+        raise AppError(
+            "Token de callback no válido.",
+            status_code=401,
+            code="invalid_callback_token",
+        )
+
+
+@router.post(
+    "/callback",
+    response_model=CallRead,
+    summary="Actualizar llamada desde el proveedor telefónico",
+)
+def call_callback(
+    payload: CallCallback,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    x_telephony_token: str | None = Header(default=None),
+) -> CallRead:
+    """Endpoint para el proveedor: confirma el estado real de una llamada.
+
+    No usa sesión de usuario; exige ``TELEPHONY_CALLBACK_TOKEN`` por
+    ``X-Telephony-Token`` o ``Authorization: Bearer``. Sin token configurado
+    responde 503 para no dejar un endpoint abierto.
+    """
+    _check_callback_token(authorization, x_telephony_token)
+    if not payload.reference and not payload.provider_call_id:
+        raise ValidationError(
+            "Indique reference o provider_call_id.", code="missing_call_reference"
+        )
+    call: CallRecord | None = None
+    if payload.reference:
+        call = db.get(CallRecord, payload.reference)
+    if call is None and payload.provider_call_id:
+        call = db.scalars(
+            select(CallRecord).where(CallRecord.provider_call_id == payload.provider_call_id)
+        ).first()
+    if call is None:
+        raise NotFoundError("Llamada", payload.reference or payload.provider_call_id)
+    if call.status in TERMINAL:
+        if call.status == payload.status and call.result == payload.result.strip():
+            return _to_read(call)
+        raise ConflictError("La llamada ya está cerrada.", code="call_closed")
+    call.status = payload.status
+    call.result = payload.result.strip()
+    if payload.status in TERMINAL:
+        call.ended_at = utcnow()
+    record_audit(
+        db,
+        actor_user_id=None,
+        actor_label="telephony-provider",
+        action="call.callback",
+        entity_type="call",
+        entity_id=call.id,
+        after={"status": payload.status, "provider_call_id": payload.provider_call_id},
+    )
+    db.commit()
+    db.refresh(call)
+    return _to_read(call)
 
 
 @router.get("", response_model=Page[CallRead], summary="Listar llamadas")

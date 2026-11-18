@@ -190,12 +190,16 @@ La Fase 8 añade telefonía configurable por entorno. Sin estas variables el mod
 | `TELEPHONY_SIP_EXTENSION` | Extensión del agente que se envía al proveedor |
 | `TELEPHONY_WEBHOOK_URL` | Endpoint del proveedor que origina la llamada (modo `webhook`) |
 | `TELEPHONY_WEBHOOK_TOKEN` | Token Bearer opcional para ese endpoint |
+| `TELEPHONY_CALLBACK_TOKEN` | Secreto obligatorio para que el proveedor confirme estados en `/api/v1/calls/callback` |
 | `TELEPHONY_WEBHOOK_TIMEOUT` | Timeout en segundos (10 por defecto) |
 
 El webhook recibe `to`, `contact_name`, `purpose`, `reference` y `extension`, y debe responder JSON
 con `call_id` (o `id`/`sid`) y opcionalmente `status`. Si no responde 2xx, la llamada queda fallida
 y auditada, y la API devuelve 502. Nunca se marca una llamada como cursada sin confirmación del
-proveedor ni se guarda audio. Tras actualizar, ejecute una vez con `AURORA_BOOTSTRAP=true` para
+proveedor ni se guarda audio. El proveedor puede confirmar el estado real con
+`POST /api/v1/calls/callback` enviando `X-Telephony-Token` o `Authorization: Bearer` con
+`TELEPHONY_CALLBACK_TOKEN`; sin ese secreto el endpoint responde 503 y no queda abierto. Tras
+actualizar, ejecute una vez con `AURORA_BOOTSTRAP=true` para
 crear los permisos nuevos (`deliveries.track`, `calls.manage`) y asignarlos a los roles.
 
 Las migraciones son aditivas por diseño; aun así, pruebe siempre en staging con una copia de la

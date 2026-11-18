@@ -100,6 +100,7 @@ class Settings(BaseSettings):
     telephony_sip_extension: str = ""
     telephony_webhook_url: str = ""
     telephony_webhook_token: str = ""
+    telephony_callback_token: str = ""
     telephony_webhook_timeout: float = 10.0
 
     @property

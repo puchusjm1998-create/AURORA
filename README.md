@@ -70,7 +70,7 @@ Además: facturas con documento original inmutable, conciliación, personal y cu
 | Bolsa de horas | ✅ | `/bolsa-horas` (saldo por contrato, trabajado y ajustes) y resumen propio en `/fichaje` |
 | Seguimiento GPS de repartos | ✅ | `/mi-reparto` (envío desde el navegador) y `/reparto` (última posición y distancia) |
 | Firma digital de entrega | ✅ | `/mi-reparto` (firma táctil, PNG + SHA-256) y consulta en `/reparto` |
-| Llamadas con handoff SIP/tel | ✅ | `/llamadas` (registro, enlaces `tel:`/`sip:`, resultado y auditoría) |
+| Llamadas con handoff SIP/tel | ✅ | `/llamadas` (registro, enlaces `tel:`/`sip:`, webhook y callback del proveedor) |
 
 ### Lo que todavía no está implementado (y no se muestra como si lo estuviera)
 
@@ -173,7 +173,7 @@ backend/
     db/            bootstrap, triggers de inmutabilidad
   alembic/         migraciones versionadas
   scripts/         seed_demo.py, backup.py, smoke_test.py y load_test.py
-  tests/           92 pruebas automatizadas
+  tests/           93 pruebas automatizadas
 frontend/
   app/             rutas App Router (login y área autenticada)
   components/      design system, shell, selectores, escáner QR
@@ -255,7 +255,7 @@ cd backend
 ../.venv/bin/python -m pytest tests -q
 ```
 
-Resultado actual: **92 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
+Resultado actual: **93 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
 etiquetas, escaneo, facturas, mapa del almacén, reservas —incluida su caducidad—, tareas de
 almacén, incidencias, fichaje —secuencias y resumen de horas—, optimización de ubicaciones y
 rutas, repartos con expedición de stock, informes, auditoría y herramientas de operación: copia

@@ -1555,6 +1555,7 @@ class TelephonyStatus(BaseModel):
     sip_domain: str
     sip_extension: str
     webhook_configured: bool
+    callback_configured: bool
     can_originate: bool
     message: str
 
@@ -1568,6 +1569,13 @@ class CallCreate(BaseModel):
 
 class CallUpdate(BaseModel):
     status: Literal["in_progress", "completed", "failed"]
+    result: str = Field(default="", max_length=2000)
+
+
+class CallCallback(BaseModel):
+    reference: Optional[str] = None
+    provider_call_id: Optional[str] = None
+    status: Literal["queued", "in_progress", "completed", "failed"]
     result: str = Field(default="", max_length=2000)
 
 

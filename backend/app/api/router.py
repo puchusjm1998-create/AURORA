@@ -8,6 +8,7 @@ from app.api.routes import (
     voice,
     analytics,
     auth,
+    calls,
     catalog,
     invoices,
     labels,
@@ -19,6 +20,7 @@ from app.api.routes import (
     system,
     attendance,
     deliveries,
+    delivery_proof,
     hours_bank,
     incidents,
     optimization,
@@ -36,6 +38,7 @@ api_router.include_router(pallets.router)
 api_router.include_router(movements.router)
 api_router.include_router(reservations.router)
 api_router.include_router(attendance.router)
+api_router.include_router(delivery_proof.router)
 api_router.include_router(deliveries.router)
 api_router.include_router(incidents.router)
 api_router.include_router(optimization.router)
@@ -50,3 +53,4 @@ api_router.include_router(shifts.router)
 api_router.include_router(nfc.router)
 api_router.include_router(hours_bank.router)
 api_router.include_router(labels.router)
+api_router.include_router(calls.router)

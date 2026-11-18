@@ -30,6 +30,7 @@ from app.core.db import SessionLocal, engine  # noqa: E402
 from app.core.enums import (  # noqa: E402
     AlertMetric,
     CalibrationMethod,
+    CallStatus,
     AlertOperator,
     AlertSeverity,
     AttendanceEventType,
@@ -52,6 +53,7 @@ from app.core.timeutils import MADRID  # noqa: E402
 from app.db.triggers import install_immutability_triggers  # noqa: E402
 from app.models import (  # noqa: E402
     AlertRule,
+    CallRecord,
     HoursBankAdjustment,
     NfcCard,
     ShiftAssignment,
@@ -820,6 +822,18 @@ def build(args: argparse.Namespace) -> None:
                 sample_count=0,
                 calibrated_by=supervisor.id,
                 notes="Medidas iniciales del plano del almacén demo; pendiente de cronometrajes.",
+            )
+        )
+        db.add(
+            CallRecord(
+                contact_name="Cliente Demo Norte S.L.",
+                phone="+34600111222",
+                purpose="Confirmar ventana de descarga del reparto",
+                provider="sip-handoff",
+                status=CallStatus.HANDOFF.value,
+                authorized_by=supervisor.id,
+                created_by=supervisor.id,
+                started_at=now,
             )
         )
         db.add_all(

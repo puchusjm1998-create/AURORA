@@ -504,6 +504,48 @@ compensar. Fechas invertidas devuelven 422 `invalid_range`; periodos de más de 
 `range_too_long`; ajustes a más de un mes en el futuro o de más de un año atrás, 409
 `invalid_effective_date`. Los fichajes no se modifican: los ajustes son la vía justificada.
 
+## Prueba de entrega: GPS y firma
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/deliveries/mine` | Repartos asignados al conductor (`deliveries.track`) |
+| POST | `/deliveries/{id}/tracking` | Registra una posición GPS durante el tránsito |
+| GET | `/deliveries/{id}/tracking` | Puntos, distancia Haversine y antigüedad de la última señal |
+| GET | `/deliveries/{id}/tracking/latest` | Última posición o 404 |
+| POST | `/deliveries/{id}/signature` | Firma multipart (`file` PNG, `signer_name`, `mark_delivered`) |
+| GET | `/deliveries/{id}/signature` | Metadatos y verificación SHA-256 de la firma |
+| GET | `/deliveries/{id}/signature/image` | Imagen PNG de la firma |
+
+El nivel 4 solo puede operar sobre repartos cuyo `driver_employee_id` sea su ficha; niveles 1-3 y
+auditoría consultan todos. Solo se admite GPS y firma en estado `in_transit` (409
+`delivery_not_in_transit`). Los puntos GPS y las firmas son append-only: no hay endpoints de
+edición ni borrado y los triggers de base de datos los protegen.
+
+La distancia descarta segmentos con velocidad implícita superior a 55 m/s, saltos de más de 5 km
+o precisión declarada peor de 500 m; el punto se conserva, pero no infla la distancia. La firma se
+valida como PNG real (Pillow), entre 50×30 y 4000×4000 px y máximo 2 MB; se guarda con SHA-256 y
+una segunda firma devuelve 409 `delivery_already_signed`. Si `mark_delivered=true`, el reparto pasa
+a `delivered`, se sella la hora y los palés a `shipped` en la misma transacción. La descarga
+incluye `X-Content-SHA256` y `Cache-Control: private, no-store`.
+
+## Llamadas y telefonía
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/calls/config` | Modo, dominio SIP, proveedor configurado y mensaje operativo |
+| GET | `/calls` | Historial paginado (`status`, `search`) |
+| GET | `/calls/{id}` | Detalle con enlaces `tel:`, `sip:` y `dial_uri` |
+| POST | `/calls` | Registra la llamada y, en modo webhook, la envía al proveedor |
+| PATCH | `/calls/{id}` | `in_progress`, `completed` o `failed` con resultado |
+
+Requiere `calls.manage` (niveles 1-3). El teléfono se normaliza a dígitos con prefijo `+`
+opcional (7-15 dígitos; 422 `invalid_phone`). En modo `handoff` el servidor no llama: devuelve
+`tel:` y, si `TELEPHONY_SIP_DOMAIN` está definido, `sip:` para que el softphone del dispositivo
+abra la llamada. En modo `webhook` se envía `to`, `contact_name`, `purpose`, `reference` y
+`extension` al proveedor; sin URL se devuelve 503 `telephony_not_configured`. Un fallo del
+proveedor deja la llamada `failed`, auditada, y devuelve 502 `telephony_provider_error`. No se
+almacena audio ni se marca una llamada como completada sin confirmación o cierre humano.
+
 ## AURORA Voice
 
 | Método | Ruta | Descripción |

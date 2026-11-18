@@ -7,11 +7,17 @@ import { api, errorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useApi } from "@/lib/useApi";
 import { deliveryStatusMeta, fmtDateTime, fmtQty } from "@/lib/format";
-import type { Delivery, Pallet } from "@/lib/types";
+import type {
+  Delivery,
+  DeliverySignature,
+  DeliveryTrackingSummary,
+  Pallet,
+} from "@/lib/types";
 import { PalletPicker } from "@/components/pickers";
 import {
   Badge,
   ConfirmDialog,
+  EmptyState,
   ErrorBlock,
   Field,
   LoadingBlock,
@@ -20,7 +26,153 @@ import {
   Stat,
   useToast,
 } from "@/components/ui";
-import { IconClose, IconPlus, IconRefresh, IconTruck } from "@/components/icons";
+import {
+  IconCheck,
+  IconClose,
+  IconPin,
+  IconPlus,
+  IconRefresh,
+  IconTruck,
+} from "@/components/icons";
+
+function ageLabel(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined) return "sin datos";
+  if (seconds < 60) return `${seconds} s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
+  return `${Math.round(seconds / 3600)} h`;
+}
+
+function DeliveryProofPanel({ delivery }: { delivery: Delivery }) {
+  const tracking = useApi<DeliveryTrackingSummary>(
+    `/api/v1/deliveries/${delivery.id}/tracking`,
+    [delivery.id],
+  );
+  const signature = useApi<DeliverySignature>(
+    delivery.has_signature ? `/api/v1/deliveries/${delivery.id}/signature` : null,
+    [delivery.id, delivery.has_signature],
+  );
+  const last = tracking.data?.last ?? null;
+
+  return (
+    <section className="card" style={{ marginBottom: 18 }}>
+      <div className="toolbar">
+        <strong className="small">Prueba de entrega</strong>
+        <Badge tone={delivery.has_signature ? "success" : "neutral"}>
+          {delivery.has_signature ? "Firmada" : "Sin firma"}
+        </Badge>
+        <span className="spacer" />
+        <button
+          type="button"
+          className="btn btn-sm btn-ghost"
+          onClick={() => {
+            tracking.reload();
+            signature.reload();
+          }}
+        >
+          <IconRefresh /> Actualizar
+        </button>
+      </div>
+      <div className="card-body">
+        <div className="grid grid-2" style={{ gap: 18 }}>
+          <div>
+            <div className="eyebrow">
+              <IconPin /> Seguimiento GPS
+            </div>
+            {tracking.error ? <ErrorBlock message={tracking.error} onRetry={tracking.reload} /> : null}
+            {!tracking.data && tracking.loading ? <LoadingBlock label="Cargando posiciones…" /> : null}
+            {tracking.data && tracking.data.points.length === 0 ? (
+              <p className="small text-muted" style={{ marginTop: 8 }}>
+                El conductor todavía no ha enviado ninguna posición desde{" "}
+                <Link href="/mi-reparto" className="text-accent">
+                  Mi reparto
+                </Link>
+                .
+              </p>
+            ) : null}
+            {last ? (
+              <>
+                <div className="small" style={{ marginTop: 8 }}>
+                  <strong>{last.latitude.toFixed(6)}, {last.longitude.toFixed(6)}</strong>
+                  {last.accuracy_m !== null ? (
+                    <span className="text-muted"> · ±{Math.round(last.accuracy_m)} m</span>
+                  ) : null}
+                </div>
+                <div className="tiny text-muted">
+                  {fmtDateTime(last.recorded_at)} · {ageLabel(tracking.data?.stale_seconds)} ·{" "}
+                  {tracking.data?.points.length ?? 0} posiciones ·{" "}
+                  {tracking.data ? `${(tracking.data.distance_m / 1000).toFixed(2)} km` : "—"}
+                </div>
+                <div className="row" style={{ marginTop: 8 }}>
+                  <Badge tone={tracking.data?.stale ? "warning" : "success"}>
+                    {tracking.data?.stale ? "Sin señal reciente" : "Señal reciente"}
+                  </Badge>
+                  <a
+                    className="btn btn-sm btn-ghost"
+                    href={`https://www.openstreetmap.org/?mlat=${last.latitude}&mlon=${last.longitude}#map=17/${last.latitude}/${last.longitude}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Ver en OpenStreetMap
+                  </a>
+                </div>
+              </>
+            ) : null}
+          </div>
+          <div>
+            <div className="eyebrow">Firma del receptor</div>
+            {signature.error ? (
+              <p className="small text-muted">{signature.error}</p>
+            ) : null}
+            {!delivery.has_signature ? (
+              <EmptyState
+                icon={<IconCheck />}
+                title="Entrega sin firma"
+                description="La firma se captura desde Mi reparto en el dispositivo del conductor."
+              />
+            ) : null}
+            {signature.data ? (
+              <>
+                <div className="small" style={{ marginTop: 8 }}>
+                  <strong>{signature.data.signer_name}</strong>
+                  {signature.data.signer_document ? (
+                    <span className="text-muted"> · {signature.data.signer_document}</span>
+                  ) : null}
+                </div>
+                <div className="tiny text-muted">
+                  {fmtDateTime(signature.data.signed_at)} ·{" "}
+                  {(signature.data.size_bytes / 1024).toFixed(1)} kB
+                </div>
+                <img
+                  src={signature.data.image_url}
+                  alt={`Firma de ${signature.data.signer_name}`}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    maxWidth: 360,
+                    maxHeight: 150,
+                    objectFit: "contain",
+                    marginTop: 8,
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    background: "#fff",
+                  }}
+                />
+                <div className="row" style={{ marginTop: 8 }}>
+                  <Badge tone={signature.data.integrity === "ok" ? "success" : "danger"}>
+                    {signature.data.integrity === "ok"
+                      ? "SHA-256 verificado"
+                      : "Evidencia alterada"}
+                  </Badge>
+                  <span className="tiny mono text-muted">{signature.data.sha256.slice(0, 16)}…</span>
+                </div>
+              </>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function DeliveryDetail() {
   const params = useSearchParams();
@@ -326,6 +478,8 @@ function DeliveryDetail() {
               {data.notes ? <p className="small text-muted" style={{ marginTop: 10 }}>{data.notes}</p> : null}
             </div>
           </section>
+
+          <DeliveryProofPanel delivery={data} />
 
           <div className="alert" style={{ marginTop: 14 }}>
             <strong>El stock sale al cargar</strong>

@@ -18,6 +18,7 @@ from app.core.enums import (
     AlertSeverity,
     AlertStatus,
     AttendanceEventType,
+    CallStatus,
     DeliveryStatus,
     EmployeeStatus,
     IncidentSeverity,
@@ -656,8 +657,52 @@ class DeliveryRead(ORMBase):
     notes: str = ""
     pallets: list[DeliveryPalletRead]
     total_units: Decimal
+    has_signature: bool = False
     created_at: UtcDateTime
     updated_at: UtcDateTime
+
+
+class DeliveryTrackingCreate(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    accuracy_m: Optional[float] = Field(default=None, ge=0, le=50000)
+    speed_mps: Optional[float] = Field(default=None, ge=0, le=150)
+    heading_deg: Optional[float] = Field(default=None, ge=0, le=360)
+
+
+class DeliveryTrackingRead(BaseModel):
+    id: str
+    latitude: float
+    longitude: float
+    accuracy_m: Optional[float] = None
+    speed_mps: Optional[float] = None
+    heading_deg: Optional[float] = None
+    source: str
+    recorded_at: UtcDateTime
+    recorded_by: Optional[str] = None
+
+
+class DeliveryTrackingSummary(BaseModel):
+    delivery_id: str
+    reference: str
+    points: list[DeliveryTrackingRead]
+    distance_m: float
+    last: Optional[DeliveryTrackingRead] = None
+    stale_seconds: Optional[int] = None
+    stale: bool = True
+
+
+class DeliverySignatureRead(BaseModel):
+    delivery_id: str
+    reference: str
+    signer_name: str
+    signer_document: str = ""
+    signed_at: UtcDateTime
+    sha256: str
+    size_bytes: int
+    mime_type: str
+    image_url: str
+    integrity: Literal["ok", "file_missing", "mismatch"] = "ok"
 
 
 class AttendanceCreate(BaseModel):
@@ -1500,3 +1545,47 @@ class HoursBankSummary(BaseModel):
     date_to: date
     items: list[HoursBankEmployee]
     totals: HoursBankTotals
+
+
+# ---------------------------------------------------------------------------
+# Phase 8 – telephony
+# ---------------------------------------------------------------------------
+class TelephonyStatus(BaseModel):
+    mode: str
+    sip_domain: str
+    sip_extension: str
+    webhook_configured: bool
+    can_originate: bool
+    message: str
+
+
+class CallCreate(BaseModel):
+    contact_name: str = Field(min_length=2, max_length=120)
+    phone: str = Field(min_length=7, max_length=32)
+    purpose: str = Field(default="", max_length=255)
+    incident_id: Optional[str] = None
+
+
+class CallUpdate(BaseModel):
+    status: Literal["in_progress", "completed", "failed"]
+    result: str = Field(default="", max_length=2000)
+
+
+class CallRead(BaseModel):
+    id: str
+    contact_name: str
+    phone: str
+    purpose: str
+    status: CallStatus
+    provider: Optional[str] = None
+    provider_call_id: Optional[str] = None
+    incident_id: Optional[str] = None
+    authorized_by: Optional[str] = None
+    created_by: Optional[str] = None
+    started_at: Optional[UtcDateTime] = None
+    ended_at: Optional[UtcDateTime] = None
+    result: str
+    created_at: UtcDateTime
+    tel_uri: str
+    sip_uri: Optional[str] = None
+    dial_uri: str

@@ -92,6 +92,20 @@ class Settings(BaseSettings):
     voice_provider: str = "aurora-builtin"
     voice_locale: str = "es-ES"
 
+    # --- Telefonía (Fase 8) -------------------------------------------------
+    # handoff: abre tel:/sip: en el dispositivo; webhook: origina la llamada en
+    # un proveedor SIP/API externo; disabled: no permite llamadas.
+    telephony_mode: str = "handoff"  # handoff | webhook | disabled
+    telephony_sip_domain: str = ""
+    telephony_sip_extension: str = ""
+    telephony_webhook_url: str = ""
+    telephony_webhook_token: str = ""
+    telephony_webhook_timeout: float = 10.0
+
+    @property
+    def telephony_can_originate(self) -> bool:
+        return self.telephony_mode == "webhook" and bool(self.telephony_webhook_url.strip())
+
     # --- Domain -------------------------------------------------------------
     warehouse_timezone: str = "Europe/Madrid"
     # Acepta DEMO_MODE y AURORA_DEMO_MODE para no romper despliegues previos.

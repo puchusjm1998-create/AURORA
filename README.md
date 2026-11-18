@@ -1,8 +1,9 @@
 # AURORA LOGISTICS AI
 
 Plataforma de gestión logística para almacenes de 10–50 trabajadores. Esta entrega cubre las
-**fases 1 a 7 y 9 a 14** del roadmap; la fase 8 (telefonía SIP/API, GPS de reparto y firma de
-entrega) sigue pendiente y se identifica como tal. El recorrido operativo es recepción →
+**fases 1 a 7 y 9 a 14** del roadmap y la **fase 8 en su parte verificable**: GPS de reparto, firma
+de entrega y registro/handoff de llamadas; la marcación automática con un proveedor SIP/API real
+sigue pendiente y se identifica como tal. El recorrido operativo es recepción →
 almacenamiento → localización → expedición, con inventario real, trazabilidad QR, palés,
 movimientos auditados, reservas, tareas, incidencias, fichaje con pausas, turnos, tarjetas NFC,
 bolsa de horas, calibración y rutas de picking, repartos, facturas, OCR, alertas, informes, voz y
@@ -67,6 +68,9 @@ Además: facturas con documento original inmutable, conciliación, personal y cu
 | Turnos de trabajo | ✅ | `/turnos` (plantillas semanales, cobertura exigida, asignación y solapes) |
 | Tarjetas NFC para fichar | ✅ | `/tarjetas` (emisión, token mostrado una vez, revocación y lectura vía API) |
 | Bolsa de horas | ✅ | `/bolsa-horas` (saldo por contrato, trabajado y ajustes) y resumen propio en `/fichaje` |
+| Seguimiento GPS de repartos | ✅ | `/mi-reparto` (envío desde el navegador) y `/reparto` (última posición y distancia) |
+| Firma digital de entrega | ✅ | `/mi-reparto` (firma táctil, PNG + SHA-256) y consulta en `/reparto` |
+| Llamadas con handoff SIP/tel | ✅ | `/llamadas` (registro, enlaces `tel:`/`sip:`, resultado y auditoría) |
 
 ### Lo que todavía no está implementado (y no se muestra como si lo estuviera)
 
@@ -79,8 +83,12 @@ las identifica explícitamente:
   estructura y SHA-256; el adaptador S3 queda pendiente.
 - **Redis/Celery** (Fase 4+): trabajos asíncronos (informes programados, notificaciones). Las
   tareas de almacén de la Fase 2 ya son reales, pero se ejecutan de forma síncrona.
-- **Telefonía SIP/API, GPS de repartos y firma digital de entrega** (Fase 8). Los repartos ya
-  expiden stock real y tienen estados, pero no geolocalización ni firma en la ficha.
+- **Marcación automática con un operador SIP/API real** (Fase 8): el adaptador webhook y el
+  handoff `tel:`/`sip:` son reales y están probados, pero el sandbox no tiene proveedor ni
+  credenciales; sin `TELEPHONY_WEBHOOK_URL` no se origina ninguna llamada y la API responde 503.
+- **GPS en segundo plano**: el navegador solo comparte ubicación mientras `/mi-reparto` está
+  abierto y con permiso explícito; no hay aplicación móvil nativa ni seguimiento con la pantalla
+  cerrada.
 - **Notificaciones asíncronas** (Redis/Celery): las alertas y los informes ya se envían por SMTP,
   pero la evaluación corre en cron síncrono y no hay cola de trabajos.
 - **Lectura física de tarjetas NFC**: la API `POST /nfc/tap` y la emisión/revocación son reales y
@@ -158,14 +166,14 @@ use otra `DATABASE_URL` y **no** ejecute el script de demostración.
 backend/
   app/
     core/          configuración, enums, RBAC, seguridad, errores, tiempo UTC/Madrid
-    models.py      43 tablas SQLAlchemy (inventario, palés, movimientos, facturas…)
+    models.py      45 tablas SQLAlchemy (inventario, palés, movimientos, facturas…)
     schemas.py     DTOs Pydantic y paginación
     api/           dependencias, serializadores y rutas /api/v1
     services/      StockEngine, auditoría, secuencias, QR, OCR, calibración, turnos, NFC y bolsa de horas
     db/            bootstrap, triggers de inmutabilidad
   alembic/         migraciones versionadas
   scripts/         seed_demo.py, backup.py, smoke_test.py y load_test.py
-  tests/           88 pruebas automatizadas
+  tests/           92 pruebas automatizadas
 frontend/
   app/             rutas App Router (login y área autenticada)
   components/      design system, shell, selectores, escáner QR
@@ -247,14 +255,15 @@ cd backend
 ../.venv/bin/python -m pytest tests -q
 ```
 
-Resultado actual: **88 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
+Resultado actual: **92 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
 etiquetas, escaneo, facturas, mapa del almacén, reservas —incluida su caducidad—, tareas de
 almacén, incidencias, fichaje —secuencias y resumen de horas—, optimización de ubicaciones y
 rutas, repartos con expedición de stock, informes, auditoría y herramientas de operación: copia
 con manifiesto SHA-256, retención y restauración, e informes PDF/Excel con contenido verificado, métricas Prometheus, envío SMTP con un servidor local de prueba, trazas OpenTelemetry, alertas
 gestionadas con evaluación, reconocimiento y notificación, OCR local sobre PDF e imagen y consultas
 de voz con permisos, calibración con regresión, planificación de turnos con solapes, tarjetas NFC con token de un solo
-uso y bolsa de horas con ajustes justificados).
+uso, bolsa de horas con ajustes justificados, GPS de reparto con filtro de saltos imposibles, firma
+PNG verificada por SHA-256 y llamadas con handoff o webhook).
 Las pruebas usan una base de datos SQLite
 temporal por ejecución; nunca tocan datos reales.
 

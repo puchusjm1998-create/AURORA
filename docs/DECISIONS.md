@@ -495,3 +495,70 @@ vacaciones, festivos ni turnos rotativos que ajusten la jornada teórica. El pro
 (`weekly_hours × días / 7`), por lo que un festivo no se descuenta automáticamente. Los ajustes
 los introduce un responsable con `attendance.manage`; no hay flujo de aprobación del trabajador.
 El saldo no genera nómina ni pago: es un indicador operativo.
+
+
+---
+
+## D-39 · GPS append-only con filtro de plausibilidad
+
+**Decisión.** Cada posición enviada por el conductor se guarda como un punto inmutable con hora del
+servidor, precisión, velocidad y rumbo opcionales. La distancia se calcula con Haversine entre
+puntos consecutivos y se descartan segmentos con velocidad implícita mayor de 55 m/s, saltos de más
+de 5 km o precisión peor de 500 m. Los puntos descartados para la distancia siguen visibles en el
+historial. No hay endpoints de edición ni borrado y los triggers bloquean UPDATE y DELETE.
+
+**Por qué.** El GPS del navegador comete errores y puede «teletransportar» el vehículo; sumar todos
+los saltos produciría kilómetros falsos. Separar el registro (evidencia) del cálculo (distancia)
+permite auditar el dato original sin aceptar su ruido. La hora se sella en servidor para que un
+reloj manipulado en el móvil no cambie la secuencia.
+
+**Límites.** Solo se comparte ubicación mientras `/mi-reparto` está abierto y el usuario concede
+permiso; no hay seguimiento en segundo plano ni aplicación nativa. La distancia es en línea recta
+entre puntos, no la ruta real por carretera, y con pocos puntos subestima curvas. La precisión
+declarada por el navegador no se puede verificar. El modo `source="signature"` registra la
+coordenada de la firma si el navegador la entrega.
+
+---
+
+## D-40 · Firma de entrega como evidencia verificable
+
+**Decisión.** La firma se captura en un canvas y se sube como PNG multipart; el servidor valida que
+sea una imagen real con Pillow, la guarda en almacenamiento content-addressed y registra nombre,
+documento opcional, usuario, IP, user-agent, fecha y SHA-256. Una entrega solo admite una firma; no
+se puede editar ni borrar. La consulta recalcula el hash del archivo y publica `integrity`
+(`ok`, `file_missing`, `mismatch`). Si se solicita, la firma marca el reparto como entregado y los
+palés como enviados en la misma transacción.
+
+**Por qué.** Una firma dibujada solo en el navegador no es prueba de nada. Guardar el PNG original
+con su hash y una verificación posterior permite detectar alteraciones y defender la entrega ante
+una reclamación. Mantener la ruta de entrega `/deliver` permite cerrar repartos antiguos o sin
+firma, pero la UI del conductor usa la firma como prueba principal.
+
+**Límites.** No hay certificado digital ni firma criptográfica del receptor; es una firma manuscrita
+escaneada. El nombre y el documento los teclea el conductor, no se validan contra una identidad.
+No se firma en un dispositivo externo ni se sella con hardware seguro. El SHA-256 prueba integridad
+del archivo, no autoría. La entrega puede completarse sin firma desde la ruta administrativa si el
+reparto ya estaba en tránsito.
+
+---
+
+## D-41 · Telefonía con handoff o webhook, nunca simulada
+
+**Decisión.** Hay tres modos explícitos: `handoff` (por defecto), `webhook` y `disabled`. En
+`handoff` el servidor construye `tel:` y, si hay dominio SIP, `sip:`; la llamada la abre el
+softphone o el marcador del dispositivo. En `webhook` el servidor envía la orden a un endpoint
+configurado y solo registra `queued`/`in_progress` si el proveedor responde 2xx; el ID del
+proveedor se guarda y un fallo deja la llamada `failed` auditada. Sin URL, la API responde 503 y no
+crea una llamada falsa.
+
+**Por qué.** El sandbox no tiene operador SIP ni credenciales, y fingir una llamada sería peor que
+no tenerla. El handoff es útil de inmediato en cualquier móvil o softphone; el webhook permite
+conectar un proveedor real sin cambiar la UI. Estados y resultados se registran para auditoría, y
+la interfaz muestra el modo activo para que nadie crea que el servidor está llamando cuando no lo
+hace.
+
+**Límites.** No se implementa la pila SIP ni RTP: no hay audio, ni grabación, ni transferencia,
+ni conferencia. El handoff depende de que el dispositivo tenga un softphone o marcador y de que el
+navegador permita abrir `sip:`. El adaptador webhook se probó contra un receptor HTTP local; un
+proveedor real puede exigir otro esquema de autenticación o campos adicionales. El estado de una
+llamada `handoff` no se actualiza automáticamente: un responsable la cierra con el resultado.

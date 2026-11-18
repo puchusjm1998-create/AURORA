@@ -728,6 +728,9 @@ class Delivery(Base, TimestampMixin):
     pallets: Mapped[list["DeliveryPallet"]] = relationship(
         back_populates="delivery", cascade="all, delete-orphan", lazy="selectin"
     )
+    signature: Mapped[Optional["DeliverySignature"]] = relationship(
+        back_populates="delivery", uselist=False, lazy="joined"
+    )
 
 
 class DeliveryPallet(Base, TimestampMixin):
@@ -877,6 +880,11 @@ class CallRecord(Base):
     ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     result: Mapped[str] = mapped_column(Text, default="", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    authorizer: Mapped[Optional["User"]] = relationship(
+        foreign_keys=[authorized_by], lazy="joined"
+    )
+    creator: Mapped[Optional["User"]] = relationship(foreign_keys=[created_by], lazy="joined")
 
 
 class ReportSchedule(Base, TimestampMixin):
@@ -1132,3 +1140,63 @@ class HoursBankAdjustment(Base, TimestampMixin):
         CheckConstraint("minutes <> 0", name="ck_hours_adjustment_non_zero"),
         CheckConstraint("minutes BETWEEN -100000 AND 100000", name="ck_hours_adjustment_range"),
     )
+
+
+class DeliveryTracking(Base):
+    """Punto GPS append-only enviado durante el transporte del reparto."""
+
+    __tablename__ = "delivery_tracking"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    delivery_id: Mapped[str] = mapped_column(
+        ForeignKey("deliveries.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    latitude: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    longitude: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    accuracy_m: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2))
+    speed_mps: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 2))
+    heading_deg: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 2))
+    source: Mapped[str] = mapped_column(String(20), default="browser", nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False, index=True
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+    delivery: Mapped[Delivery] = relationship(lazy="joined")
+    creator: Mapped[Optional["User"]] = relationship(foreign_keys=[created_by], lazy="joined")
+
+    __table_args__ = (
+        CheckConstraint("latitude BETWEEN -90 AND 90", name="ck_delivery_tracking_latitude"),
+        CheckConstraint("longitude BETWEEN -180 AND 180", name="ck_delivery_tracking_longitude"),
+        CheckConstraint("accuracy_m IS NULL OR accuracy_m >= 0", name="ck_delivery_tracking_accuracy"),
+        CheckConstraint("speed_mps IS NULL OR speed_mps >= 0", name="ck_delivery_tracking_speed"),
+    )
+
+
+class DeliverySignature(Base):
+    """Firma del receptor almacenada como evidencia inmutable."""
+
+    __tablename__ = "delivery_signatures"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    delivery_id: Mapped[str] = mapped_column(
+        ForeignKey("deliveries.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    signer_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    signer_document: Mapped[str] = mapped_column(String(32), default="", nullable=False)
+    signature_path: Mapped[str] = mapped_column(String(255), nullable=False)
+    signature_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(40), default="image/png", nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    signed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    ip: Mapped[Optional[str]] = mapped_column(String(64))
+    user_agent: Mapped[Optional[str]] = mapped_column(String(255))
+    created_by: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+    delivery: Mapped[Delivery] = relationship(back_populates="signature", lazy="joined")
+    creator: Mapped[Optional["User"]] = relationship(foreign_keys=[created_by], lazy="joined")

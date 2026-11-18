@@ -395,6 +395,7 @@ export interface Delivery {
   notes: string;
   pallets: DeliveryPallet[];
   total_units: Decimal;
+  has_signature: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -1001,4 +1002,74 @@ export interface HoursBankAdjustment {
   minutes: number;
   reason: string;
   created_at: string;
+}
+
+
+/* Fase 8 — prueba de entrega */
+export interface DeliveryTrackingPoint {
+  id: string;
+  latitude: number;
+  longitude: number;
+  accuracy_m: number | null;
+  speed_mps: number | null;
+  heading_deg: number | null;
+  source: string;
+  recorded_at: string;
+  recorded_by: string | null;
+}
+
+export interface DeliveryTrackingSummary {
+  delivery_id: string;
+  reference: string;
+  points: DeliveryTrackingPoint[];
+  distance_m: number;
+  last: DeliveryTrackingPoint | null;
+  stale_seconds: number | null;
+  stale: boolean;
+}
+
+export interface DeliverySignature {
+  delivery_id: string;
+  reference: string;
+  signer_name: string;
+  signer_document: string;
+  signed_at: string;
+  sha256: string;
+  size_bytes: number;
+  mime_type: string;
+  image_url: string;
+  integrity: "ok" | "file_missing" | "mismatch";
+}
+
+
+/* Fase 8 — telefonía */
+export type CallStatus = "handoff" | "queued" | "in_progress" | "completed" | "failed";
+
+export interface CallRecord {
+  id: string;
+  contact_name: string;
+  phone: string;
+  purpose: string;
+  status: CallStatus;
+  provider: string | null;
+  provider_call_id: string | null;
+  incident_id: string | null;
+  authorized_by: string | null;
+  created_by: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  result: string;
+  created_at: string;
+  tel_uri: string;
+  sip_uri: string | null;
+  dial_uri: string;
+}
+
+export interface TelephonyStatus {
+  mode: "handoff" | "webhook" | "disabled";
+  sip_domain: string;
+  sip_extension: string;
+  webhook_configured: boolean;
+  can_originate: boolean;
+  message: string;
 }

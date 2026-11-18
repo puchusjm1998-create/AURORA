@@ -41,6 +41,7 @@ class PermissionCode(StrEnum):
     # Transport & incidents
     DELIVERIES_READ = "deliveries.read"
     DELIVERIES_WRITE = "deliveries.write"
+    DELIVERIES_TRACK = "deliveries.track"
     INCIDENTS_READ = "incidents.read"
     INCIDENTS_WRITE = "incidents.write"
     INCIDENTS_REPORT = "incidents.report"
@@ -282,3 +283,12 @@ class NfcTapAction(StrEnum):
     CLOCK_OUT = "clock_out"
     BREAK_START = "break_start"
     BREAK_END = "break_end"
+
+
+
+class CallStatus(StrEnum):
+    HANDOFF = "handoff"
+    QUEUED = "queued"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"

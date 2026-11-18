@@ -159,8 +159,9 @@ Procedimiento recomendado de actualización:
 
 Esta entrega añade las migraciones `8c1f4b2a7d90` (tipo de incidencia y vínculos a producto y
 palé), `d4e5f6a7b8c9` (palés asignados a repartos), `c9d0e1f2a3b4` (calibración, tiempos y turnos)
-y `e1f2a3b4c5d6` (tarjetas NFC, bolsa de horas y `employees.weekly_hours`), además de permisos
-nuevos (`tasks.*`, `incidents.report`, `attendance.clock`). Aplique el esquema con
+`e1f2a3b4c5d6` (tarjetas NFC, bolsa de horas y `employees.weekly_hours`) y `f2a3b4c5d6e7`
+(seguimiento GPS y firmas de entrega), además de permisos nuevos (`tasks.*`, `incidents.report`,
+`attendance.clock`, `deliveries.track` y `calls.manage`). Aplique el esquema con
 `AURORA_RUN_MIGRATIONS=true` y arranque una vez con `AURORA_BOOTSTRAP=true` para que la semilla
 RBAC cree los permisos y los asigne a los cinco roles; después puede volver a `false`. Sin ese
 paso, las rutas de tareas e incidencias responderán 403 aunque el administrador tenga la sesión
@@ -173,9 +174,29 @@ curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/incidents | head -c 200
 curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/attendance/me | head -c 200
 curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/nfc/cards | head -c 200
 curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/hours-bank | head -c 200
+curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/calls/config | head -c 200
+curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/deliveries/mine | head -c 200
 curl -fsS -b cookies.txt "http://127.0.0.1:8000/api/v1/optimization/slotting?days=30" | head -c 200
 curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/deliveries | head -c 200
 ```
+
+La Fase 8 añade telefonía configurable por entorno. Sin estas variables el modo por defecto es
+`handoff`: la interfaz abre `tel:` o `sip:` en el dispositivo y el servidor no origina llamadas.
+
+| Variable | Uso |
+|---|---|
+| `TELEPHONY_MODE` | `handoff` (por defecto), `webhook` o `disabled` |
+| `TELEPHONY_SIP_DOMAIN` | Dominio SIP para construir `sip:<teléfono>@<dominio>` |
+| `TELEPHONY_SIP_EXTENSION` | Extensión del agente que se envía al proveedor |
+| `TELEPHONY_WEBHOOK_URL` | Endpoint del proveedor que origina la llamada (modo `webhook`) |
+| `TELEPHONY_WEBHOOK_TOKEN` | Token Bearer opcional para ese endpoint |
+| `TELEPHONY_WEBHOOK_TIMEOUT` | Timeout en segundos (10 por defecto) |
+
+El webhook recibe `to`, `contact_name`, `purpose`, `reference` y `extension`, y debe responder JSON
+con `call_id` (o `id`/`sid`) y opcionalmente `status`. Si no responde 2xx, la llamada queda fallida
+y auditada, y la API devuelve 502. Nunca se marca una llamada como cursada sin confirmación del
+proveedor ni se guarda audio. Tras actualizar, ejecute una vez con `AURORA_BOOTSTRAP=true` para
+crear los permisos nuevos (`deliveries.track`, `calls.manage`) y asignarlos a los roles.
 
 Las migraciones son aditivas por diseño; aun así, pruebe siempre en staging con una copia de la
 base real antes de producción.
@@ -489,7 +510,7 @@ producción con PostgreSQL los valores deben obtenerse contra el servidor real y
 | Redis + Celery | Fase 4+ | Tareas asíncronas, informes programados |
 | OCR de facturas | Fase 4 | Proveedor externo; sin él las líneas son manuales |
 | AURORA Voice (STT/TTS/LLM) | Fase 5 | Voz femenina española; proveedor intercambiable |
-| Telefonía SIP/API y GPS de repartos | Fase 8 | Requiere operador, credenciales y dispositivo |
+| Marcación telefónica automática | Fase 8 | Requiere operador SIP/API y credenciales; el handoff y el webhook ya están incluidos |
 | Monitorización externa (Prometheus/OpenTelemetry) | Fase 9 | Endpoints de métricas y trazas |
 
 Ninguna de estas piezas se simula en la entrega actual: `/sistema` muestra su estado real.

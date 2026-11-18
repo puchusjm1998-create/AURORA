@@ -173,6 +173,7 @@ curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/tasks | head -c 200
 curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/incidents | head -c 200
 curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/attendance/me | head -c 200
 curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/nfc/cards | head -c 200
+curl -fsS -b cookies.txt http://127.0.0.1:8000/lector/ | head -c 200
 curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/hours-bank | head -c 200
 curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/calls/config | head -c 200
 curl -fsS -b cookies.txt http://127.0.0.1:8000/api/v1/deliveries/mine | head -c 200
@@ -505,6 +506,21 @@ producción con PostgreSQL los valores deben obtenerse contra el servidor real y
 - [ ] `DEMO_MODE=false` y ninguna base de demostración en el servidor.
 
 ---
+
+## 7 bis. Lector NFC y GPS en el navegador
+
+- **Web NFC** (grabar etiquetas en `/tarjetas` y leerlas en `/lector`) solo está disponible en Chrome
+  para Android y en contexto seguro: **HTTPS** o `localhost`. No funciona en Safari/iOS ni en la
+  mayoría de navegadores de escritorio.
+- **Lector USB HID**: muchos lectores NFC emulan un teclado. Configure el lector para escribir el
+  token `AUR-NFC-…` y enviar Enter; `/lector` lo captura en el campo de token. No se instala ningún
+  driver ni SDK propietario.
+- El kiosco debe iniciar sesión con un usuario con `attendance.clock`; un usuario de nivel 4 solo
+  puede fichar su propia tarjeta. Para un lector compartido use un usuario de nivel 2/3 responsable.
+- **GPS**: `/mi-reparto` mantiene la pantalla activa con Screen Wake Lock cuando el navegador lo
+  permite, envía cada 12 s en movimiento y cada 45 s parado, y muestra el recorrido. Si el móvil
+  bloquea la pantalla o se cierra la pestaña, el navegador deja de enviar; no hay seguimiento en
+  segundo plano sin app nativa.
 
 ## 8. Pendiente de infraestructura (fases posteriores)
 

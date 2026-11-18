@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, errorMessage } from "@/lib/api";
+import { haversineMeters, requestScreenWakeLock } from "@/lib/geo";
 import { useApi } from "@/lib/useApi";
 import {
   deliveryStatusMeta,
@@ -15,6 +16,7 @@ import type {
   DeliveryTrackingSummary,
   Page,
 } from "@/lib/types";
+import { TrackingTrail } from "@/components/TrackingTrail";
 import {
   Badge,
   EmptyState,
@@ -61,12 +63,17 @@ export default function MyDeliveryPage() {
     latitude: number;
     longitude: number;
     accuracy: number | null;
+    speed: number | null;
+    heading: number | null;
     at: number;
   } | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [sent, setSent] = useState(0);
+  const [wakeLockActive, setWakeLockActive] = useState(false);
   const watchId = useRef<number | null>(null);
   const lastSentAt = useRef(0);
+  const lastSentPosition = useRef<{ latitude: number; longitude: number } | null>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const selectedIdRef = useRef<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -84,11 +91,29 @@ export default function MyDeliveryPage() {
     setSelectedId((active ?? deliveries.data.items[0])?.id ?? null);
   }, [deliveries.data, selectedId]);
 
+  const acquireWakeLock = useCallback(async () => {
+    if (wakeLockRef.current && !wakeLockRef.current.released) return;
+    const lock = await requestScreenWakeLock();
+    if (lock) {
+      lock.onrelease = () => {
+        wakeLockRef.current = null;
+        setWakeLockActive(false);
+      };
+    }
+    wakeLockRef.current = lock;
+    setWakeLockActive(lock !== null);
+  }, []);
+
   const stopTracking = useCallback(() => {
     if (watchId.current !== null && typeof navigator !== "undefined") {
       navigator.geolocation.clearWatch(watchId.current);
       watchId.current = null;
     }
+    if (wakeLockRef.current) {
+      void wakeLockRef.current.release();
+      wakeLockRef.current = null;
+    }
+    setWakeLockActive(false);
     setGeoState("idle");
   }, []);
 
@@ -101,6 +126,15 @@ export default function MyDeliveryPage() {
   }, [selectedId, stopTracking]);
 
   useEffect(() => () => stopTracking(), [stopTracking]);
+
+  useEffect(() => {
+    if (geoState !== "on") return;
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void acquireWakeLock();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [geoState, acquireWakeLock]);
 
   useEffect(() => {
     if (!selected || selected.has_signature) return;
@@ -117,13 +151,25 @@ export default function MyDeliveryPage() {
     setHasInk(false);
   }, [selected?.id, selected?.has_signature]);
 
-  async function sendPosition(latitude: number, longitude: number, accuracy: number | null) {
+  async function sendPosition(
+    latitude: number,
+    longitude: number,
+    accuracy: number | null,
+    speed: number | null,
+    heading: number | null,
+  ) {
     const deliveryId = selectedIdRef.current;
     if (!deliveryId) return;
     try {
       await api(`/api/v1/deliveries/${deliveryId}/tracking`, {
         method: "POST",
-        body: { latitude, longitude, accuracy_m: accuracy },
+        body: {
+          latitude,
+          longitude,
+          accuracy_m: accuracy,
+          speed_mps: speed,
+          heading_deg: heading,
+        },
       });
       setSent((value) => value + 1);
       setGeoError(null);
@@ -142,16 +188,34 @@ export default function MyDeliveryPage() {
     }
     if (watchId.current !== null) return;
     lastSentAt.current = 0;
+    lastSentPosition.current = null;
     setGeoState("on");
     setGeoError(null);
+    void acquireWakeLock();
     watchId.current = navigator.geolocation.watchPosition(
       (positionData) => {
-        const { latitude, longitude, accuracy } = positionData.coords;
-        setPosition({ latitude, longitude, accuracy, at: Date.now() });
+        const { latitude, longitude, accuracy, speed, heading } = positionData.coords;
+        const cleanAccuracy = Number.isFinite(accuracy) ? accuracy : null;
+        const cleanSpeed = Number.isFinite(speed) ? speed : null;
+        const cleanHeading = Number.isFinite(heading) ? heading : null;
+        setPosition({
+          latitude,
+          longitude,
+          accuracy: cleanAccuracy,
+          speed: cleanSpeed,
+          heading: cleanHeading,
+          at: Date.now(),
+        });
         const now = Date.now();
-        if (now - lastSentAt.current < 15000) return;
+        const moved = lastSentPosition.current
+          ? haversineMeters(lastSentPosition.current, { latitude, longitude })
+          : Number.POSITIVE_INFINITY;
+        // Más frecuencia al moverse; una señal cada 45 s si está parado.
+        const interval = moved >= 25 ? 12000 : 45000;
+        if (now - lastSentAt.current < interval) return;
         lastSentAt.current = now;
-        void sendPosition(latitude, longitude, Number.isFinite(accuracy) ? accuracy : null);
+        lastSentPosition.current = { latitude, longitude };
+        void sendPosition(latitude, longitude, cleanAccuracy, cleanSpeed, cleanHeading);
       },
       (error) => {
         setGeoState("error");
@@ -164,6 +228,11 @@ export default function MyDeliveryPage() {
           navigator.geolocation.clearWatch(watchId.current);
           watchId.current = null;
         }
+        if (wakeLockRef.current) {
+          void wakeLockRef.current.release();
+          wakeLockRef.current = null;
+        }
+        setWakeLockActive(false);
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
     );
@@ -366,8 +435,9 @@ export default function MyDeliveryPage() {
                         <IconPin /> Seguimiento GPS
                       </div>
                       <div className="small text-muted">
-                        El navegador envía una posición cada 15 segundos mientras el reparto está en
-                        tránsito. Requiere permiso de ubicación y conexión segura.
+                        El navegador envía una posición cada 12 segundos en movimiento y cada 45
+                        segundos parado, mientras el reparto está en tránsito. Mantiene la pantalla
+                        activa si el navegador lo permite; requiere permiso de ubicación y HTTPS.
                       </div>
                     </div>
                     <div className="row">
@@ -397,6 +467,7 @@ export default function MyDeliveryPage() {
                         {sent} posiciones enviadas
                         {position ? ` · última ${position.latitude.toFixed(6)}, ${position.longitude.toFixed(6)}` : ""}
                         {position?.accuracy ? ` · ±${Math.round(position.accuracy)} m` : ""}
+                        {wakeLockActive ? " · pantalla activa" : ""}
                       </span>
                     </div>
                   ) : null}
@@ -447,6 +518,19 @@ export default function MyDeliveryPage() {
                       ) : null}
                     </div>
                   </div>
+                  {tracking.data && tracking.data.points.length > 0 ? (
+                    <div style={{ marginTop: 16 }}>
+                      <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
+                        <span className="tiny text-muted">
+                          Recorrido · {tracking.data.points.length} posiciones
+                        </span>
+                        <span className="tiny text-muted">
+                          {(tracking.data.distance_m / 1000).toFixed(2)} km acumulados
+                        </span>
+                      </div>
+                      <TrackingTrail points={tracking.data.points} />
+                    </div>
+                  ) : null}
                   {tracking.error ? <ErrorBlock message={tracking.error} onRetry={tracking.reload} /> : null}
                 </div>
               </section>

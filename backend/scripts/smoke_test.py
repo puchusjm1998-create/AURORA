@@ -61,6 +61,7 @@ CHECKS: list[tuple[str, str, str, tuple[int, ...]]] = [
     ("Frontend: voz", "GET", "/voz/", (200,)),
     ("Frontend: turnos", "GET", "/turnos/", (200,)),
     ("Frontend: tarjetas NFC", "GET", "/tarjetas/", (200,)),
+    ("Frontend: lector NFC", "GET", "/lector/", (200,)),
     ("Frontend: bolsa de horas", "GET", "/bolsa-horas/", (200,)),
     ("Frontend: mi reparto", "GET", "/mi-reparto/", (200,)),
     ("Frontend: llamadas", "GET", "/llamadas/", (200,)),

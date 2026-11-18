@@ -136,5 +136,7 @@ def test_roles_catalog_and_system_info(admin_client, worker_client):
     payload = info.json()
     assert payload["phase"]
     assert payload["implemented"] and payload["pending"]
+    assert any("Lector NFC" in item for item in payload["implemented"])
+    assert not any("lectores NFC" in item.lower() for item in payload["pending"])
 
     assert worker_client.get("/api/v1/roles").status_code == 403

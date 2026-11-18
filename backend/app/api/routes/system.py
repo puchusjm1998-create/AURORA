@@ -41,16 +41,16 @@ IMPLEMENTED = [
     "AURORA Voice: dictado y lectura en el navegador con consultas reales de stock, tareas y repartos",
     "Calibración del almacén con plano real y tiempos cronometrados, con ajuste por regresión",
     "Turnos de trabajo semanales con cobertura exigida, asignación y control de solapes",
-    "Tarjetas NFC con token opaco (solo hash SHA-256), emisión, revocación y fichaje por lectura",
+    "Tarjetas NFC con token opaco (solo hash SHA-256), emisión, revocación, grabación NDEF y lectura física",
     "Bolsa de horas: saldo real por contrato semanal, fichajes y ajustes justificados auditados",
     "Seguimiento GPS de repartos con puntos append-only, distancia Haversine y antigüedad de la señal",
     "Firma digital de entrega en PNG con SHA-256, verificación de integridad y bloqueo de re-firma",
     "Registro de llamadas con handoff tel:/sip:, adaptador webhook y callback firmado del proveedor",
+    "Lector NFC en el navegador (Web NFC y lectores USB HID) y grabación de etiquetas NDEF",
 ]
 
 PENDING = [
     "Marcación automática con un proveedor SIP/API real: el adaptador webhook está probado, pero el sandbox no tiene operador ni credenciales",
-    "Integración física de lectores NFC: la API de fichaje por token ya es real, pero no se escriben ni leen etiquetas desde el navegador",
     "Lectura GPS en segundo plano con la aplicación cerrada: el navegador solo comparte ubicación mientras Mi reparto está abierto y con permiso",
 ]
 
@@ -64,7 +64,7 @@ def system_info() -> SystemInfo:
         demo_mode=settings.demo_mode,
         server_time_utc=utcnow().isoformat().replace("+00:00", "Z"),
         warehouse_timezone=settings.warehouse_timezone,
-        phase="Fases 1-7 y 9-14 completas; Fase 8 con GPS, firma y registro de llamadas operativos; falta conectar un proveedor SIP/API real",
+        phase="Fases 1-7 y 9-14 completas; Fase 8 con GPS, firma, llamadas y lector NFC operativos; falta conectar un proveedor SIP/API real",
         implemented=IMPLEMENTED,
         pending=PENDING,
     )

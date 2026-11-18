@@ -14,6 +14,7 @@ import type {
   Pallet,
 } from "@/lib/types";
 import { PalletPicker } from "@/components/pickers";
+import { TrackingTrail } from "@/components/TrackingTrail";
 import {
   Badge,
   ConfirmDialog,
@@ -116,6 +117,15 @@ function DeliveryProofPanel({ delivery }: { delivery: Delivery }) {
                   </a>
                 </div>
               </>
+            ) : null}
+            {tracking.data && tracking.data.points.length > 1 ? (
+              <div style={{ marginTop: 12 }}>
+                <TrackingTrail
+                  points={tracking.data.points}
+                  height={160}
+                  label={`Recorrido del reparto ${delivery.reference}`}
+                />
+              </div>
             ) : null}
           </div>
           <div>

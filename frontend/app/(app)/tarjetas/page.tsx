@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { api, errorMessage, withQuery } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import { fmtDateTime } from "@/lib/format";
+import { webNfcSupported, writeNfcToken } from "@/lib/nfc";
 import type { Employee, NfcCard, NfcCardIssued, Page } from "@/lib/types";
 import {
   Badge,
@@ -16,7 +18,7 @@ import {
   PageHeader,
   useToast,
 } from "@/components/ui";
-import { IconPlus, IconQr, IconRefresh, IconTrash } from "@/components/icons";
+import { IconNfc, IconPlus, IconQr, IconRefresh, IconTrash } from "@/components/icons";
 
 export default function NfcCardsPage() {
   const toast = useToast();
@@ -38,6 +40,13 @@ export default function NfcCardsPage() {
   const [error, setError] = useState<string | null>(null);
   const [issued, setIssued] = useState<NfcCardIssued | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<NfcCard | null>(null);
+  const [nfcSupported, setNfcSupported] = useState(false);
+  const [writing, setWriting] = useState(false);
+  const [writeError, setWriteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNfcSupported(webNfcSupported());
+  }, []);
 
   const employeeOptions = employees.data?.items ?? [];
   const activeCards = useMemo(
@@ -69,8 +78,9 @@ export default function NfcCardsPage() {
       });
       setOpen(false);
       setIssued(card);
+      setWriteError(null);
       cards.reload();
-      toast.success("Tarjeta emitida", "Copie el token ahora: no se volverá a mostrar.");
+      toast.success("Tarjeta emitida", "Guarde o grabe el token ahora: no se volverá a mostrar.");
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -90,6 +100,27 @@ export default function NfcCardsPage() {
       toast.error("No se pudo revocar", errorMessage(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function writeTag() {
+    if (!issued) return;
+    setWriting(true);
+    setWriteError(null);
+    try {
+      await writeNfcToken(issued.token);
+      toast.success(
+        "Etiqueta grabada",
+        "Acerque esta etiqueta al lector NFC para fichar.",
+      );
+    } catch (err) {
+      setWriteError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo grabar la etiqueta. Compruebe el permiso NFC y que esté cerca.",
+      );
+    } finally {
+      setWriting(false);
     }
   }
 
@@ -128,9 +159,9 @@ export default function NfcCardsPage() {
 
       <div className="alert info" style={{ marginBottom: 16 }}>
         <span>
-          Una tarjeta activa por trabajador. La lectura física con lector NFC queda pendiente de
-          integración; el endpoint <span className="mono">POST /api/v1/nfc/tap</span> ya registra
-          fichajes reales con el token.
+          Una tarjeta activa por trabajador. Grabe el token en una etiqueta NDEF desde esta página
+          (Web NFC en Chrome Android) y use el <Link href="/lector">lector NFC</Link> para fichar; también
+          se admite un lector USB en modo teclado.
         </span>
       </div>
 
@@ -290,6 +321,11 @@ export default function NfcCardsPage() {
         onClose={() => setIssued(null)}
         footer={
           <>
+            {nfcSupported ? (
+              <button type="button" className="btn btn-ghost" onClick={writeTag} disabled={writing}>
+                {writing ? <span className="spinner" /> : <IconNfc />} Grabar en etiqueta NFC
+              </button>
+            ) : null}
             <button type="button" className="btn btn-ghost" onClick={copyToken}>
               Copiar token
             </button>
@@ -322,6 +358,25 @@ export default function NfcCardsPage() {
               En la base de datos solo queda el hash y los últimos cuatro caracteres (••••{" "}
               {issued.token_last4}). Si se pierde, revoque la tarjeta y emita otra.
             </p>
+            {nfcSupported ? (
+              <p className="small text-muted" style={{ marginTop: 8 }}>
+                «Grabar en etiqueta NFC» escribe el token como texto NDEF. Acerque una etiqueta
+                virgen y manténgala hasta que termine. No grabe etiquetas de pago o acceso ajenas.
+              </p>
+            ) : (
+              <div className="alert warning" style={{ marginTop: 10 }}>
+                <span>
+                  Este navegador no soporta Web NFC. Use Chrome para Android sobre HTTPS para
+                  grabar la etiqueta, o entregue el token a un lector USB que lo escriba como
+                  teclado.
+                </span>
+              </div>
+            )}
+            {writeError ? (
+              <div className="alert danger" style={{ marginTop: 10 }}>
+                <span>{writeError}</span>
+              </div>
+            ) : null}
           </>
         ) : null}
       </Modal>

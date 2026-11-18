@@ -481,7 +481,9 @@ plantilla y día, sin ocultar los huecos.
 | GET | `/nfc/state/{employee_id}` | Estado derivado (`out`/`in`/`break`) del trabajador |
 
 El token tiene el formato `AUR-NFC-…`; en la base de datos solo queda SHA-256 y los últimos cuatro
-caracteres. Hay una tarjeta activa por trabajador (409 `employee_has_active_card`). Una tarjeta
+caracteres. El frontend `/tarjetas` graba el token en una etiqueta NDEF con Web NFC y `/lector`
+acepta tanto Web NFC como un lector USB en modo teclado (token + Enter). La lectura exige HTTPS
+(o localhost) y un navegador con Web NFC; el lector USB no necesita API del navegador. Hay una tarjeta activa por trabajador (409 `employee_has_active_card`). Una tarjeta
 revocada devuelve 409 `card_revoked`; un token desconocido, 404. `auto` elige la transición natural
 (entrada si está fuera, salida si trabaja, fin de pausa si está en pausa) y cualquier secuencia
 inválida devuelve 409 `invalid_sequence`. El trabajador de nivel 4 solo puede usar su propia

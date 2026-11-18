@@ -219,7 +219,8 @@ registros, nunca de un campo «estado actual» que pueda desincronizarse. Las re
 validan en el servidor, incluida la compatibilidad con registros posteriores cuando un responsable
 inserta un fichaje antiguo. El nivel 4 puede fichar únicamente su propia ficha; los responsables
 pueden registrar fichajes ajenos (por ejemplo, una tarjeta olvidada) y queda constancia de quién lo
-hizo. La planificación de turnos y las tarjetas NFC siguen pendientes y no se simulan.
+hizo. La planificación de turnos y las tarjetas NFC se añadieron en fases posteriores (D-34, D-37 y
+D-42) y tampoco se simulan.
 
 ## D-25. Optimización como sugerencia con geometría declarada
 
@@ -470,10 +471,10 @@ hace que una copia filtrada no sirva para fichar. Mostrar el token una sola vez 
 pantallas, listados o registros de auditoría. Revocar en lugar de borrar conserva la trazabilidad.
 
 **Límites.** El token se transmite al lector o al trabajador por un canal que el sistema no
-controla; no hay criptografía en hardware ni atestación de tarjeta. No se escriben etiquetas NFC
-desde el navegador ni se integra un lector USB: la API está probada con el token, pero la lectura
-física queda pendiente. Una tarjeta perdida puede fichar hasta que un responsable la revoque. El
-token no caduca por tiempo; se rota revocando y emitiendo otra.
+controla; no hay criptografía en hardware ni atestación de tarjeta. La escritura y lectura física
+se hacen con Web NFC o con un lector USB HID (D-42); siguen siendo un token opaco, no una tarjeta
+bancaria. Una tarjeta perdida puede fichar hasta que un responsable la revoque. El token no caduca
+por tiempo; se rota revocando y emitiendo otra.
 
 ---
 
@@ -562,3 +563,37 @@ ni conferencia. El handoff depende de que el dispositivo tenga un softphone o ma
 navegador permita abrir `sip:`. El adaptador webhook se probó contra un receptor HTTP local; un
 proveedor real puede exigir otro esquema de autenticación o campos adicionales. El estado de una
 llamada `handoff` no se actualiza automáticamente: un responsable la cierra con el resultado.
+
+
+## D-42 · Web NFC y lector USB HID, sin SDK propietario
+
+**Decisión.** La grabación y lectura de etiquetas se hace con la API Web NFC del navegador
+(Chrome Android sobre HTTPS) o con un lector USB que emula teclado y escribe el token. El backend
+no cambia: sigue recibiendo `POST /nfc/tap` con el token opaco y aplicando permisos, secuencia y
+auditoría. No se incluye un SDK de fabricante ni se guarda el token en `localStorage`.
+
+**Por qué.** Web NFC es un estándar del navegador y permite grabar una etiqueta NDEF sin instalar
+software; el modo HID cubre lectores de escritorio y dispositivos sin Web NFC. La alternativa de
+un lector propietario añadiría dependencias, drivers y una superficie de ataque que no aporta
+seguridad al token.
+
+**Límites.** Web NFC no existe en Safari/iOS y requiere contexto seguro. El lector HID debe
+configurarse para escribir el token AURORA, no el UID crudo de la etiqueta. La entrada manual del
+token sigue siendo posible y se audita igual. El navegador no puede impedir que alguien fotografíe
+una etiqueta; la revocación es la respuesta operativa.
+
+## D-43 · GPS adaptativo y pantalla activa, sin prometer segundo plano
+
+**Decisión.** El seguimiento GPS envía cada 12 s si el vehículo se ha movido ≥25 m y cada 45 s si
+está parado, con velocidad y rumbo cuando el dispositivo los proporciona. Mientras está activo
+solicita Screen Wake Lock y lo recupera al volver a primer plano. El recorrido se dibuja en SVG
+con los puntos reales, sin teselas externas.
+
+**Por qué.** Ahorra batería y datos sin perder la traza; la pantalla activa evita que el móvil
+suspenda la pestaña en una ruta. El SVG funciona sin conexión y no envía coordenadas a un servicio
+de mapas.
+
+**Límites.** Si el sistema operativo cierra la pestaña o bloquea la pantalla, el navegador deja de
+ejecutar `watchPosition`; no hay seguimiento en segundo plano real. Los puntos se registran con la
+hora del servidor al recibirlos, no con la hora del dispositivo, para no aceptar cronologías
+manipuladas.

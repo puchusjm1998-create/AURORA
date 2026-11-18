@@ -2,8 +2,8 @@
 
 Plataforma de gestión logística para almacenes de 10–50 trabajadores. Esta entrega cubre las
 **fases 1 a 7 y 9 a 14** del roadmap y la **fase 8 en su parte verificable**: GPS de reparto, firma
-de entrega y registro/handoff de llamadas; la marcación automática con un proveedor SIP/API real
-sigue pendiente y se identifica como tal. El recorrido operativo es recepción →
+de entrega, lector de tarjetas NFC y registro/handoff de llamadas; la marcación automática con un
+proveedor SIP/API real sigue pendiente y se identifica como tal. El recorrido operativo es recepción →
 almacenamiento → localización → expedición, con inventario real, trazabilidad QR, palés,
 movimientos auditados, reservas, tareas, incidencias, fichaje con pausas, turnos, tarjetas NFC,
 bolsa de horas, calibración y rutas de picking, repartos, facturas, OCR, alertas, informes, voz y
@@ -66,16 +66,16 @@ Además: facturas con documento original inmutable, conciliación, personal y cu
 | AURORA Voice | ✅ | `/voz` (dictado y lectura del navegador; respuestas con datos reales, sin audio fuera del dispositivo) |
 | Calibración del almacén | ✅ | `/optimizacion` (plano, tiempos cronometrados y regresión con R²/MAE) |
 | Turnos de trabajo | ✅ | `/turnos` (plantillas semanales, cobertura exigida, asignación y solapes) |
-| Tarjetas NFC para fichar | ✅ | `/tarjetas` (emisión, token mostrado una vez, revocación y lectura vía API) |
+| Tarjetas NFC para fichar | ✅ | `/tarjetas` (emisión, token mostrado una vez, revocación y grabación NDEF) |
+| Lector físico de tarjetas NFC | ✅ | `/lector` (Web NFC en Chrome Android y lectores USB en modo teclado) |
 | Bolsa de horas | ✅ | `/bolsa-horas` (saldo por contrato, trabajado y ajustes) y resumen propio en `/fichaje` |
-| Seguimiento GPS de repartos | ✅ | `/mi-reparto` (envío desde el navegador) y `/reparto` (última posición y distancia) |
+| Seguimiento GPS de repartos | ✅ | `/mi-reparto` (envío adaptativo con pantalla activa) y `/reparto` (recorrido, última posición y distancia) |
 | Firma digital de entrega | ✅ | `/mi-reparto` (firma táctil, PNG + SHA-256) y consulta en `/reparto` |
 | Llamadas con handoff SIP/tel | ✅ | `/llamadas` (registro, enlaces `tel:`/`sip:`, webhook y callback del proveedor) |
 
-### Lo que todavía no está implementado (y no se muestra como si lo estuviera)
+### Lo que todavía no está implementado o depende del entorno
 
-Estas capacidades pertenecen a fases posteriores y dependen de proveedores externos. La interfaz
-las identifica explícitamente:
+La interfaz identifica explícitamente estas capacidades y sus límites; no se simulan:
 
 - **LLM conversacional y voz neuronal** (Fase 5 ampliada): AURORA Voice usa la Web Speech API del
   navegador y un motor local de consultas; no hay modelo de lenguaje externo ni claves de terceros.
@@ -91,10 +91,10 @@ las identifica explícitamente:
   cerrada.
 - **Notificaciones asíncronas** (Redis/Celery): las alertas y los informes ya se envían por SMTP,
   pero la evaluación corre en cron síncrono y no hay cola de trabajos.
-- **Lectura física de tarjetas NFC**: la API `POST /nfc/tap` y la emisión/revocación son reales y
-  están probadas, pero no se escriben etiquetas NFC desde el navegador ni se integra un lector USB;
-  el token debe entregarse al trabajador o lector por un canal seguro. La tarjeta es un token
-  opaco, no una tarjeta bancaria ni un certificado criptográfico en hardware.
+- **Web NFC limitado por el navegador**: la lectura y grabación de etiquetas funciona con Chrome
+  para Android sobre HTTPS y con lectores USB que escriben el token como teclado. Safari/iOS no
+  implementa Web NFC; la entrada manual del token sigue disponible. La tarjeta es un token opaco,
+  no una tarjeta bancaria ni un certificado criptográfico en hardware.
 - **Medición automática de tiempos**: los cronometrajes se introducen desde la ruta calculada; no
   hay sensores ni lectores de presencia que midan recorridos sin intervención.
 

@@ -1,7 +1,7 @@
 # Despliegue y operación
 
-AURORA se despliega como **una imagen** que contiene la API y el frontend compilado, más una base
-de datos PostgreSQL. El objetivo es una cloud europea (por ejemplo, un VPS en Frankfurt, París o
+AURORA se despliega como **una imagen** que contiene la API y el frontend compilado, más PostgreSQL,
+Redis y los procesos worker/beat de Celery. El objetivo es una cloud europea (por ejemplo, un VPS en Frankfurt, París o
 Madrid) con HTTPS, copias de seguridad y actualizaciones controladas.
 
 > **HTTPS es obligatorio**: las cookies `Secure`, el service worker de la PWA y la cámara del
@@ -32,9 +32,13 @@ APP_PORT=8000
 
 ```bash
 docker compose up -d --build
-docker compose ps
+docker compose ps            # db, redis, voice-model, api, worker y beat
 curl -fsS http://127.0.0.1:8000/healthz
 ```
+
+`voice-model` descarga una sola vez el modelo Piper español (180 MB) en el volumen
+`aurora-models` y verifica su SHA-256; después termina. Si `VOICE_TTS_PROVIDER` no es `piper`, el
+servicio no descarga nada.
 
 En el primer arranque el contenedor aplica las migraciones de Alembic, crea los triggers de
 inmutabilidad, siembra los cinco roles con sus permisos y crea la cuenta administradora. No carga
@@ -71,6 +75,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r backend/requirements.txt
 npm --prefix frontend ci
 npm --prefix frontend run build              # genera frontend/out
+python backend/scripts/fetch_voice_model.py  # voz Piper local (opcional si usa Edge/OpenAI)
 
 export ENVIRONMENT=production
 export DATABASE_URL="postgresql+psycopg://aurora:CLAVE@127.0.0.1:5432/aurora"
@@ -81,6 +86,8 @@ export AURORA_RUN_MIGRATIONS=true
 export AURORA_ADMIN_EMAIL=admin@suempresa.es
 export AURORA_ADMIN_PASSWORD='<inicial fuerte>'
 export STORAGE_DIR=/var/lib/aurora/storage
+export STORAGE_CACHE_DIR=/var/lib/aurora/cache
+export VOICE_TTS_MODEL_PATH=/opt/aurora/backend/data/models/es_ES-davefx-medium.onnx
 
 cd backend
 ../.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers \
@@ -130,8 +137,29 @@ WantedBy=multi-user.target
 | `SMTP_USER/PASSWORD` | No | Autenticación SMTP si el servidor la exige |
 | `SMTP_FROM` | Para informes | Remitente de los informes programados |
 | `SMTP_STARTTLS` / `SMTP_SSL` | No | STARTTLS activo por defecto; `SMTP_SSL=true` para puerto 465 |
+| `STORAGE_BACKEND` | No | `local` (por defecto) o `s3` |
 | `STORAGE_DIR` | No | Ruta de documentos originales (volumen persistente) |
+| `STORAGE_CACHE_DIR` | No | Caché de descargas S3 (volumen persistente) |
 | `MAX_UPLOAD_MB` | No | Tamaño máximo por factura (25 por defecto) |
+| `S3_BUCKET` | Con `s3` | Bucket destino; obligatorio para activar S3 |
+| `S3_PREFIX` | No | Prefijo de claves (`aurora` por defecto) |
+| `S3_REGION` | No | Región de firma (`eu-west-1` por defecto) |
+| `S3_ENDPOINT_URL` | Para MinIO/Ceph | Vacío para AWS; p. ej. `http://minio:9000` |
+| `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` | Para MinIO/Ceph | Credenciales IAM o de usuario del bucket |
+| `S3_ADDRESSING_STYLE` | No | `path` para MinIO/Ceph, `virtual` para AWS |
+| `S3_TIMEOUT` | No | Timeout de boto3 en segundos (30 por defecto) |
+| `REDIS_URL` | Cola | `redis://redis:6379/0` en Compose |
+| `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND` | No | Vacíos usan `REDIS_URL` |
+| `CELERY_TASK_ALWAYS_EAGER` | No | `true` solo en pruebas; no usar en producción |
+| `CELERY_TASK_TIME_LIMIT` | No | Límite por tarea en segundos (300 por defecto) |
+| `VOICE_TTS_PROVIDER` | No | `piper` (por defecto), `edge`, `openai` o `browser` |
+| `VOICE_TTS_VOICE` | No | Voz del proveedor; por defecto `es_ES-davefx-medium` |
+| `VOICE_TTS_MODEL_PATH` | Con Piper | Ruta al `.onnx`; en Compose `/app/backend/data/models/es_ES-davefx-medium.onnx` |
+| `VOICE_TTS_API_KEY` | Con OpenAI | Clave de la API de síntesis |
+| `VOICE_TTS_MODEL`/`VOICE_TTS_BASE_URL` | No | Modelo y endpoint compatible con OpenAI |
+| `VOICE_TTS_TIMEOUT` | No | Timeout del proveedor de voz (30 s) |
+| `VOICE_TTS_MAX_CHARS` | No | Longitud máxima del texto (1200 por defecto) |
+| `VOICE_TTS_CACHE_DIR` | No | Caché de audio por hash (volumen persistente) |
 | `WAREHOUSE_TIMEZONE` | No | `Europe/Madrid` |
 | `CORS_ORIGINS` | Solo dev | Orígenes permitidos cuando el frontend va en otro puerto |
 
@@ -417,11 +445,66 @@ introducirse a mano.
 
 ### AURORA Voice
 
-No hay nada que configurar para usar la voz: el dictado y la lectura ocurren en el navegador del
-usuario. `VOICE_PROVIDER=aurora-builtin` (por defecto) y `VOICE_LOCALE=es-ES` pueden ajustarse en
-`.env`. El micrófono exige contexto seguro (HTTPS o `localhost`); en HTTP el navegador lo bloquea.
-El servidor solo recibe el texto de la consulta y no guarda audio ni historial. Si el navegador no
-soporta Web Speech API, la página `/voz` mantiene la entrada de texto.
+El dictado sigue ocurriendo en el navegador (Web Speech API, `es-ES`). La síntesis puede hacerse en
+el servidor con una voz neuronal local:
+
+```bash
+python backend/scripts/fetch_voice_model.py     # 180 MB, verifica SHA-256
+# Voz es_ES-davefx-medium (CC0, Piper Voices); queda en backend/data/models/.
+# El proveedor por defecto es piper.
+```
+
+Compruebe el estado con `curl -s -b cookies.txt .../api/v1/voice/status`: debe devolver
+`tts.provider=piper`, `tts.available=true`, `tts.neural=true` y `audio_leaves_device=false`.
+`POST /voice/speak` devuelve un WAV de Piper o un MP3 de Edge/OpenAI y cachea el audio por hash;
+repita la misma frase y verifique `X-Voice-Cached: 1`. Para Edge TTS (`VOICE_TTS_PROVIDER=edge`,
+requiere salida a `speech.platform.bing.com` y la voz `es-ES-ElviraNeural`) o OpenAI
+(`VOICE_TTS_API_KEY`), ajuste también `VOICE_TTS_VOICE`.
+
+El micrófono exige contexto seguro (HTTPS o `localhost`); en HTTP el navegador lo bloquea. El
+servidor no guarda el texto de la síntesis ni historial de consultas. Si el proveedor no está
+disponible, `/voz` cae a `SpeechSynthesis` del navegador y la interfaz lo indica.
+
+### Almacenamiento S3 compatible
+
+Con `STORAGE_BACKEND=s3`, subidas y descargas usan boto3 (firma v4). Funciona con AWS S3, MinIO,
+Ceph RGW o cualquier API compatible. Ejemplo con MinIO en la misma red de Compose:
+
+```dotenv
+STORAGE_BACKEND=s3
+S3_BUCKET=aurora-docs
+S3_PREFIX=aurora
+S3_REGION=eu-west-1
+S3_ENDPOINT_URL=http://minio:9000
+S3_ACCESS_KEY_ID=<usuario>
+S3_SECRET_ACCESS_KEY=<clave>
+S3_ADDRESSING_STYLE=path
+```
+
+El bucket debe existir y permitir `PutObject`, `GetObject`, `HeadObject`, `DeleteObject` y
+`ListBucket` sobre `S3_PREFIX/*`; no se crea automáticamente. La aplicación comprueba el acceso al
+arrancar `/system/storage` con `list_objects_v2`. Los documentos mantienen la misma clave relativa
+que en local, el SHA-256 se conserva y la descarga se cachea en `STORAGE_CACHE_DIR`. Si el bucket
+no responde, la API sigue en pie pero las subidas devuelven 503 `storage_unavailable` (no se deja
+una copia local silenciosa).
+
+### Cola Redis y Celery
+
+Compose arranca Redis 7 con AOF, un worker con dos procesos y beat. Compruebe:
+
+```bash
+docker compose exec redis redis-cli ping                       # PONG
+docker compose logs -f worker beat
+curl -s -b cookies.txt https://aurora.ejemplo.es/api/v1/system/queue
+curl -s -b cookies.txt -X POST https://aurora.ejemplo.es/api/v1/system/queue/ping
+# use el task_id devuelto en /api/v1/system/queue/{task_id}
+```
+
+`broker_available=true` y `worker_online=true` significan cola operativa. Beat evalúa alertas y
+envía informes programados cada 5 minutos; **desactive el cron síncrono anterior** para no
+duplicar envíos. Para Redis gestionado use `REDIS_URL` con TLS (`rediss://`) y, si su proveedor lo
+exige, `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND`. El sandbox se validó con Redis 7.2 local, no
+con Sentinel, Cluster ni un servicio gestionado.
 
 ### Evaluación de alertas
 
@@ -522,15 +605,18 @@ producción con PostgreSQL los valores deben obtenerse contra el servidor real y
   bloquea la pantalla o se cierra la pestaña, el navegador deja de enviar; no hay seguimiento en
   segundo plano sin app nativa.
 
-## 8. Pendiente de infraestructura (fases posteriores)
+## 8. Límites externos declarados
 
-| Capacidad | Cuándo | Nota |
+| Capacidad | Estado | Límite real |
 |---|---|---|
-| Almacenamiento S3 compatible | Fase 4 | Adaptador sobre la misma clave `storage/invoices/...` |
-| Redis + Celery | Fase 4+ | Tareas asíncronas, informes programados |
-| OCR de facturas | Fase 4 | Proveedor externo; sin él las líneas son manuales |
-| AURORA Voice (STT/TTS/LLM) | Fase 5 | Voz femenina española; proveedor intercambiable |
-| Marcación telefónica automática | Fase 8 | Requiere operador SIP/API y credenciales; el handoff y el webhook ya están incluidos |
-| Monitorización externa (Prometheus/OpenTelemetry) | Fase 9 | Endpoints de métricas y trazas |
+| Almacenamiento S3 | Implementado | Probado contra la API S3 emulada por `moto`; falta validar bucket, IAM y red del clúster de destino |
+| Redis + Celery | Implementado | Probado con Redis 7.2 local y worker/beat reales; TLS, Sentinel y Cluster no se probaron |
+| Voz Piper local | Implementado | Modelo ONNX de 61 MB descargado aparte; voz `es_ES-davefx-medium` |
+| Edge / OpenAI TTS | Implementado | El sandbox no tiene salida a sus endpoints; requieren Internet y, OpenAI, clave |
+| LLM generativo | No incluido | Las intenciones se resuelven con reglas locales; no hay modelo conversacional |
+| Marcación telefónica automática | Parcial | Handoff y webhook reales; falta un operador SIP/API y credenciales |
+| Monitorización externa | Endpoints listos | `/metrics` y trazas OTLP; el colector y las alertas son infraestructura del cliente |
 
-Ninguna de estas piezas se simula en la entrega actual: `/sistema` muestra su estado real.
+Ninguna de estas piezas se simula: `/sistema` muestra el estado real de S3, Redis, worker y TTS.
+El detalle de lo que no puede cubrirse en este sandbox está también en `/api/v1/system/info`
+(`pending`).

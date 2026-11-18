@@ -597,3 +597,62 @@ de mapas.
 ejecutar `watchPosition`; no hay seguimiento en segundo plano real. Los puntos se registran con la
 hora del servidor al recibirlos, no con la hora del dispositivo, para no aceptar cronologías
 manipuladas.
+
+---
+
+## D-44 · S3 desde boto3 con la misma clave relativa que el disco local
+
+**Decisión.** `STORAGE_BACKEND` selecciona `local` o `s3`; el resto del código sigue guardando una
+clave relativa (`invoices/AAAA/MM/DD/...`, `deliveries/...`) y un SHA-256. El adaptador S3 usa
+boto3, firma v4 y `addressing_style` configurable. La descarga desde S3 se cachea en
+`STORAGE_CACHE_DIR` y el archivo temporal de subida se borra solo después de que S3 confirme.
+
+**Por qué.** Mantener la misma clave permite migrar documentos entre disco y bucket sin tocar la
+base de datos, y boto3 cubre AWS, MinIO y Ceph sin SDK específico. No se implementa una capa
+propia sobre HTTP porque la firma SigV4 y los reintentos son fáciles de equivocar.
+
+**Límites.** Las pruebas usan `moto` (API S3 emulada), no un clúster real. No hay cifrado del lado
+del cliente, lifecycle, versionado ni object lock: se configuran en el bucket y deben probarse en
+la infraestructura de destino. Sin `list_objects_v2` el bucket se considera inaccesible. La caché
+de lectura no se invalida por eventos: si un objeto cambia en el bucket, hay que borrar la entrada
+local o reiniciar el servicio.
+
+---
+
+## D-45 · Celery sobre Redis para trabajo programado, con estado visible
+
+**Decisión.** Redis 7 es el broker y backend de resultados; un worker prefork y beat ejecutan
+`aurora.evaluate_alerts` y `aurora.send_scheduled_reports` cada 5 minutos. La API expone
+`/system/queue` y una tarea `aurora.ping` para verificar broker y worker sin depender de logs. En
+pruebas se usa `CELERY_TASK_ALWAYS_EAGER=true`.
+
+**Por qué.** Las tareas de almacén siguen siendo síncronas porque el usuario espera el resultado,
+pero la evaluación periódica y los envíos SMTP no deben bloquear una petición ni depender de que
+alguien recuerde un cron. El estado visible evita el fallo silencioso: si Redis no responde o no hay
+worker, `/sistema` lo dice y el ping devuelve 503.
+
+**Límites.** El sandbox se validó con Redis 7.2 compilado en local y un worker real; no se probaron
+TLS, Sentinel, Cluster ni la política de memoria de un proveedor gestionado. En modo eager los
+resultados viven en memoria del proceso y se pierden al reiniciar. Beat debe ejecutarse una sola
+instancia: dos beats duplicarían los envíos. Si convive con el cron antiguo, también habrá duplicados.
+
+---
+
+## D-46 · Voz neuronal Piper local como opción por defecto
+
+**Decisión.** El servidor sintetiza con Piper (`piper-tts`, ONNX) usando el modelo español
+`es_ES-davefx-medium`, cachea el WAV por SHA-256 de proveedor+voz+velocidad+texto y expone
+`/voice/speak`. Edge y OpenAI quedan como alternativas explícitas; si el proveedor no está
+disponible, el frontend usa `SpeechSynthesis`. El modelo no se versiona en Git: se descarga con
+`scripts/fetch_voice_model.py` y se verifica su hash.
+
+**Por qué.** El sandbox no tiene salida a Microsoft ni a OpenAI, pero sí puede ejecutar ONNX en CPU.
+Una voz local hace que la función sea real y verificable de punta a punta, sin claves ni datos que
+salgan del servidor. La caché evita repetir síntesis de frases frecuentes y el formato WAV no exige
+un codificador adicional.
+
+**Límites.** Es una voz sintética, no un clon ni una voz humana; la calidad depende del modelo y no
+se comparó formalmente con Edge/OpenAI. La descarga inicial es de 180 MB (bundle) y el ONNX ocupa
+61 MB; el despliegue necesita ese espacio y el volumen `aurora-models`. Piper no está disponible en
+todos los entornos sin `onnxruntime`; en ese caso `/voice/status` lo declara y no se finge audio.
+El texto sintetizado no se guarda, solo el hash de la caché.

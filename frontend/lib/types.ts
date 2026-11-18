@@ -621,6 +621,40 @@ export interface SystemInfo {
   pending: string[];
 }
 
+export interface StorageStatus {
+  backend: string;
+  bucket: string | null;
+  prefix: string;
+  endpoint: string;
+  reachable: boolean;
+  error: string | null;
+}
+
+export interface QueueStatus {
+  enabled: boolean;
+  eager: boolean;
+  broker_available: boolean;
+  worker_online: boolean;
+  broker: string;
+  task: string;
+  message: string;
+}
+
+export interface QueueEnqueued {
+  task_id: string;
+  state: string;
+  message: string;
+}
+
+export interface QueueTaskStatus {
+  task_id: string;
+  state: string;
+  ready: boolean;
+  successful: boolean | null;
+  result: Record<string, unknown> | null;
+  error: string | null;
+}
+
 export interface ScanResult {
   kind: "product" | "pallet" | "unit" | "location" | "employee";
   code: string;
@@ -838,7 +872,16 @@ export interface VoiceStatus {
   available: boolean;
   interchangeable: boolean;
   stt: string;
-  tts: string;
+  tts: {
+    provider: string;
+    available: boolean;
+    neural: boolean;
+    voice: string;
+    model: string | null;
+    audio_leaves_device: boolean;
+    reason: string;
+  };
+  configured_provider?: string;
   audio_leaves_device: boolean;
   llm_configured: boolean;
   locale: string;

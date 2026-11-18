@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { useApi } from "@/lib/useApi";
+import type { QueueStatus, StorageStatus } from "@/lib/types";
 import { fmtDateTime, warehouseTimeNow } from "@/lib/format";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import {
@@ -16,6 +18,8 @@ import {
 
 export default function SystemPage() {
   const { system, user } = useAuth();
+  const storage = useApi<StorageStatus>("/api/v1/system/storage");
+  const queue = useApi<QueueStatus>("/api/v1/system/queue");
   const [warehouseTime, setWarehouseTime] = useState("—");
   const [checkedAt, setCheckedAt] = useState("—");
 
@@ -61,6 +65,78 @@ export default function SystemPage() {
           </div>
         </div>
 
+        <div className="grid grid-2">
+          <Card
+            title="Almacenamiento documental"
+            subtitle={storage.data ? `${storage.data.backend.toUpperCase()} · prefijo ${storage.data.prefix || "—"}` : "Comprobando…"}
+            actions={
+              <button className="btn btn-sm btn-ghost" onClick={storage.reload} disabled={storage.loading}>
+                Reintentar
+              </button>
+            }
+          >
+            {storage.error ? (
+              <div className="alert danger">{storage.error}</div>
+            ) : (
+              <div className="stack" style={{ gap: 8 }}>
+                <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
+                  <span className="small">Estado</span>
+                  <Badge tone={storage.data?.reachable ? "success" : "warning"}>
+                    {storage.data?.reachable ? "Bucket accesible" : "Sin bucket remoto"}
+                  </Badge>
+                </div>
+                <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
+                  <span className="small">Bucket</span>
+                  <code className="inline-code">{storage.data?.bucket || "local"}</code>
+                </div>
+                <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
+                  <span className="small">Endpoint</span>
+                  <span className="tiny text-muted">{storage.data?.endpoint || "filesystem local"}</span>
+                </div>
+                {storage.data?.error && <p className="hint">{storage.data.error}</p>}
+                <p className="hint">
+                  Las firmas, fotos y PDF de factura se guardan con SHA-256. Con <code>STORAGE_BACKEND=s3</code> se
+                  suben a S3 (AWS, MinIO o Ceph) y la descarga se cachea en el servidor.
+                </p>
+              </div>
+            )}
+          </Card>
+
+          <Card
+            title="Cola de tareas"
+            subtitle={queue.data ? `Celery · ${queue.data.broker}` : "Comprobando…"}
+            actions={
+              <button className="btn btn-sm btn-ghost" onClick={queue.reload} disabled={queue.loading}>
+                Reintentar
+              </button>
+            }
+          >
+            {queue.error ? (
+              <div className="alert danger">{queue.error}</div>
+            ) : (
+              <div className="stack" style={{ gap: 8 }}>
+                <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
+                  <span className="small">Broker Redis</span>
+                  <Badge tone={queue.data?.broker_available ? "success" : "warning"}>
+                    {queue.data?.broker_available ? "Conectado" : "No disponible"}
+                  </Badge>
+                </div>
+                <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
+                  <span className="small">Worker</span>
+                  <Badge tone={queue.data?.worker_online ? "success" : "warning"}>
+                    {queue.data?.worker_online ? "En línea" : "Sin worker"}
+                  </Badge>
+                </div>
+                <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
+                  <span className="small">Modo</span>
+                  <span className="tiny text-muted">{queue.data?.eager ? "eager (pruebas)" : "asíncrono"}</span>
+                </div>
+                <p className="hint">{queue.data?.message}</p>
+              </div>
+            )}
+          </Card>
+        </div>
+
         <div className="split">
           <div className="stack">
             <Card title="Funcionalidades operativas" subtitle={system?.phase}>
@@ -74,7 +150,7 @@ export default function SystemPage() {
               </div>
             </Card>
 
-            <Card title="Pendiente de fases posteriores" subtitle="No se presentan como funcionalidades disponibles">
+            <Card title="Límites externos y dependencias" subtitle="Lo que no puede probarse sin infraestructura o credenciales del cliente">
               <div className="stack" style={{ gap: 8 }}>
                 {(system?.pending ?? []).map((item) => (
                   <div key={item} className="row" style={{ gap: 8, alignItems: "flex-start" }}>
@@ -103,28 +179,28 @@ export default function SystemPage() {
                     </tr>
                     <tr>
                       <td>Almacenamiento documental S3</td>
-                      <td><Badge tone="warning">Fase 4</Badge></td>
-                      <td className="small text-muted">Bucket, región y credenciales IAM</td>
+                      <td><Badge tone={storage.data?.reachable ? "success" : storage.data?.backend === "s3" ? "warning" : "info"}>{storage.data?.reachable ? "Activo" : storage.data?.backend === "s3" ? "Sin conexión" : "Local"}</Badge></td>
+                      <td className="small text-muted"><code className="inline-code">S3_BUCKET</code>, región y credenciales IAM</td>
                     </tr>
                     <tr>
                       <td>OCR de facturas</td>
-                      <td><Badge tone="warning">Sin proveedor</Badge></td>
-                      <td className="small text-muted">API key del proveedor OCR</td>
+                      <td><Badge tone="success">Local (ONNX)</Badge></td>
+                      <td className="small text-muted">Sin API externa; RapidOCR dentro del servidor</td>
                     </tr>
                     <tr>
-                      <td>AURORA Voice (STT/TTS/LLM)</td>
-                      <td><Badge tone="warning">Fase 5</Badge></td>
-                      <td className="small text-muted">Proveedor intercambiable + voz española</td>
+                      <td>AURORA Voice (TTS neuronal)</td>
+                      <td><Badge tone="success">Activo</Badge></td>
+                      <td className="small text-muted"><code className="inline-code">VOICE_TTS_PROVIDER</code> (piper/edge/openai/browser)</td>
                     </tr>
                     <tr>
                       <td>Telefonía</td>
-                      <td><Badge tone="warning">Fase 8</Badge></td>
-                      <td className="small text-muted">SIP trunk o API de llamadas</td>
+                      <td><Badge tone="info">Handoff</Badge></td>
+                      <td className="small text-muted">SIP trunk o API de llamadas para marcación automática</td>
                     </tr>
                     <tr>
                       <td>Redis / Celery</td>
-                      <td><Badge tone="warning">Fase 4+</Badge></td>
-                      <td className="small text-muted"><code className="inline-code">REDIS_URL</code></td>
+                      <td><Badge tone={queue.data?.broker_available ? "success" : "warning"}>{queue.data?.broker_available ? "Activo" : "No disponible"}</Badge></td>
+                      <td className="small text-muted"><code className="inline-code">REDIS_URL</code> + worker</td>
                     </tr>
                   </tbody>
                 </table>
@@ -151,7 +227,8 @@ export default function SystemPage() {
               <p className="hint" style={{ marginTop: 10 }}>
                 La documentación de API se genera automáticamente a partir del código y se actualiza con cada
                 despliegue. <code>/metrics</code> expone latencias, errores, base de datos y operación en formato
-                Prometheus; puede protegerse con <code>METRICS_TOKEN</code>. Las trazas siguen pendientes.
+                Prometheus; puede protegerse con <code>METRICS_TOKEN</code>. Las trazas OpenTelemetry se
+                exportan por OTLP o consola con <code>AURORA_TRACING_ENABLED=true</code>.
               </p>
             </Card>
 
@@ -175,8 +252,10 @@ export default function SystemPage() {
             <div className="alert warning">
               <strong><IconMic width={14} height={14} style={{ display: "inline", verticalAlign: "-2px" }} /> Voz femenina española</strong>
               <span>
-                La interfaz de conversación, el reconocimiento y la síntesis de voz se incorporarán en la Fase 5
-                con el proveedor que se configure. No hay micrófono simulado en esta entrega.
+                La síntesis neuronal funciona en <Link href="/voz">AURORA Voice</Link> con el proveedor configurado
+                (<code>edge</code> no necesita clave; <code>openai</code> requiere <code>VOICE_TTS_API_KEY</code>).
+                Si el proveedor no está disponible, el navegador sintetiza en local. El reconocimiento de voz
+                sigue siendo el del navegador: no se envía audio a AURORA.
               </span>
             </div>
 

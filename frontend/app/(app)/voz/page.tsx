@@ -56,8 +56,10 @@ export default function VoicePage() {
   const [interim, setInterim] = useState("");
   const [speakAnswers, setSpeakAnswers] = useState(false);
   const [speechSupported, setSpeechSupported] = useState({ recognition: false, synthesis: false });
+  const [speaking, setSpeaking] = useState(false);
   const recognition = useRef<SpeechRecognitionLike | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -75,13 +77,27 @@ export default function VoicePage() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
 
-  function speak(message: string) {
+  useEffect(() => {
+    return () => {
+      audioRef.current?.pause();
+      if (audioRef.current?.src.startsWith("blob:")) URL.revokeObjectURL(audioRef.current.src);
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const neuralVoice = Boolean(status.data?.details?.tts?.neural && status.data.details.tts.available);
+
+  function speakWithBrowser(message: string) {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     const synth = window.speechSynthesis;
     synth.cancel();
     const utterance = new SpeechSynthesisUtterance(message);
     utterance.lang = "es-ES";
     utterance.rate = 1;
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
     const voices = synth.getVoices().filter((voice) => voice.lang.toLowerCase().startsWith("es"));
     const preferred = [
       "helena", "laura", "monica", "mónica", "paulina", "sabina", "elena", "google español",
@@ -90,7 +106,52 @@ export default function VoicePage() {
       preferred.some((name) => voice.name.toLowerCase().includes(name)),
     );
     if (female) utterance.voice = female;
+    setSpeaking(true);
     synth.speak(utterance);
+  }
+
+  async function speak(message: string) {
+    if (neuralVoice) {
+      try {
+        const response = await fetch("/api/v1/voice/speak", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: message }),
+        });
+        if (!response.ok) throw new Error("tts_unavailable");
+        const blob = await response.blob();
+        if (blob.size === 0) throw new Error("tts_empty");
+        if (audioRef.current) {
+          audioRef.current.pause();
+          if (audioRef.current.src.startsWith("blob:")) URL.revokeObjectURL(audioRef.current.src);
+        }
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.onended = () => {
+          setSpeaking(false);
+          URL.revokeObjectURL(url);
+        };
+        audio.onerror = () => {
+          setSpeaking(false);
+          URL.revokeObjectURL(url);
+        };
+        setSpeaking(true);
+        await audio.play();
+        return;
+      } catch {
+        toast.error("Voz neuronal no disponible", "Se usa la voz del navegador como respaldo.");
+      }
+    }
+    speakWithBrowser(message);
+  }
+
+  function stopSpeaking() {
+    audioRef.current?.pause();
+    setSpeaking(false);
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
   }
 
   async function ask(question: string) {
@@ -114,7 +175,7 @@ export default function VoicePage() {
           confidence: reply.confidence,
         },
       ]);
-      if (speakAnswers) speak(reply.answer);
+      if (speakAnswers) void speak(reply.answer);
     } catch (err) {
       const detail = errorMessage(err);
       toast.error("No se pudo consultar", detail);
@@ -194,7 +255,11 @@ export default function VoicePage() {
       <div className="split" style={{ gap: 18, alignItems: "start" }}>
         <Card
           title="Conversación"
-          subtitle="La transcripción se procesa en el servidor; el audio no sale del navegador"
+          subtitle={
+            neuralVoice
+              ? "La transcripción se procesa en el servidor; la respuesta se lee con voz neuronal"
+              : "La transcripción se procesa en el servidor; el audio no sale del navegador"
+          }
         >
           <div className="chat" aria-live="polite">
             {messages.map((message, index) => (
@@ -206,9 +271,13 @@ export default function VoicePage() {
                     {typeof message.confidence === "number" ? (
                       <span className="tiny text-muted">{Math.round(message.confidence * 100)}%</span>
                     ) : null}
-                    {speechSupported.synthesis ? (
-                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => speak(message.text)}>
-                        Escuchar
+                    {neuralVoice || speechSupported.synthesis ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost"
+                        onClick={() => (speaking ? stopSpeaking() : void speak(message.text))}
+                      >
+                        {speaking ? "Detener" : "Escuchar"}
                       </button>
                     ) : null}
                   </div>
@@ -290,6 +359,9 @@ export default function VoicePage() {
               <Badge tone={details?.available ? "success" : "warning"}>
                 {details?.available ? "Motor local activo" : "Motor no disponible"}
               </Badge>
+              <Badge tone={neuralVoice ? "success" : "info"} dot={false}>
+                {neuralVoice ? `Voz neuronal · ${details?.tts?.provider}` : "Voz del navegador"}
+              </Badge>
               <Badge tone="info" dot={false}>es-ES</Badge>
             </div>
             <p className="small text-soft">{details?.provider_label ?? "Consultas AURORA locales"}</p>
@@ -303,8 +375,9 @@ export default function VoicePage() {
             <div className="alert" style={{ marginTop: 4 }}>
               <IconInfo />
               <span>
-                Reconocimiento y síntesis usan la Web Speech API del navegador. Solo se envía el texto
-                transcrito; no se guarda el audio ni el historial en la base de datos.
+                {neuralVoice
+                  ? `La síntesis usa la voz neuronal ${details?.tts?.voice} del servidor y se cachea por hash; el texto no se guarda en la base de datos.`
+                  : "Reconocimiento y síntesis usan la Web Speech API del navegador. Solo se envía el texto transcrito; no se guarda el audio ni el historial en la base de datos."}
               </span>
             </div>
             {status.error ? <p className="form-error">{status.error}</p> : null}

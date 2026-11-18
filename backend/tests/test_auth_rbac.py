@@ -137,6 +137,19 @@ def test_roles_catalog_and_system_info(admin_client, worker_client):
     assert payload["phase"]
     assert payload["implemented"] and payload["pending"]
     assert any("Lector NFC" in item for item in payload["implemented"])
+    assert any("S3" in item for item in payload["implemented"])
+    assert any("Celery" in item for item in payload["implemented"])
+    assert any("Piper" in item for item in payload["implemented"])
     assert not any("lectores NFC" in item.lower() for item in payload["pending"])
 
     assert worker_client.get("/api/v1/roles").status_code == 403
+
+
+def test_infrastructure_status_requires_read_but_ping_requires_settings(
+    admin_client, worker_client, auditor_client
+):
+    for client in (admin_client, worker_client, auditor_client):
+        assert client.get("/api/v1/system/storage").status_code == 200
+        assert client.get("/api/v1/system/queue").status_code == 200
+    assert worker_client.post("/api/v1/system/queue/ping").status_code == 403
+    assert auditor_client.post("/api/v1/system/queue/ping").status_code == 403

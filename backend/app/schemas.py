@@ -1226,6 +1226,46 @@ class SystemInfo(BaseModel):
     pending: list[str]
 
 
+class StorageStatus(BaseModel):
+    backend: str
+    bucket: Optional[str] = None
+    prefix: str = ""
+    endpoint: str = ""
+    reachable: bool = False
+    error: Optional[str] = None
+
+
+class QueueStatus(BaseModel):
+    enabled: bool
+    eager: bool
+    broker_available: bool
+    worker_online: bool
+    broker: str
+    task: str
+    message: str
+
+
+class QueueEnqueued(BaseModel):
+    task_id: str
+    state: str
+    message: str
+
+
+class QueueTaskStatus(BaseModel):
+    task_id: str
+    state: str
+    ready: bool
+    successful: Optional[bool] = None
+    result: Optional[dict[str, Any]] = None
+    error: Optional[str] = None
+
+
+class VoiceSpeakRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=1200)
+    voice: Optional[str] = Field(default=None, max_length=100)
+    rate: str = Field(default="+0%", max_length=12)
+
+
 class ScanResult(BaseModel):
     kind: str
     code: str

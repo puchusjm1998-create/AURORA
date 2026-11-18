@@ -422,9 +422,40 @@ La auditoría es append-only: triggers de base de datos rechazan `UPDATE` y `DEL
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/system/info` | Versión, entorno, zona horaria, fase, implementado y pendiente |
-| GET | `/system/health` | Comprobación de base de datos y almacenamiento |
+| GET | `/system/health` | Comprobación de base de datos |
+| GET | `/system/storage` | Backend local/S3, bucket, endpoint, prefijo y accesibilidad real |
+| GET | `/system/queue` | Redis, disponibilidad del broker y worker, modo eager y mensaje |
+| POST | `/system/queue/ping` | Encola `aurora.ping` (`settings.manage`) y devuelve `task_id` |
+| GET | `/system/queue/{task_id}` | Estado Celery, resultado o error de la tarea |
 
 `/healthz` (fuera de `/api`) es el endpoint ligero para balanceadores y contenedores.
+
+### Almacenamiento y cola
+
+`GET /system/storage` requiere `inventory.read` y devuelve
+`{backend, bucket, prefix, endpoint, reachable, error}`. Con `STORAGE_BACKEND=local` el bucket es
+`null` y `reachable` es `true`; con `s3`, el backend ejecuta `list_objects_v2` para comprobar que el
+bucket y las credenciales funcionan. Un error de S3 no tumba la API: se devuelve `reachable=false`
+con el motivo, y las subidas fallan con 503 `storage_unavailable` sin dejar el fichero local.
+
+Los originales de factura, las firmas de entrega y cualquier documento usan la misma clave
+relativa en los dos backends. La descarga desde S3 se cachea en `STORAGE_CACHE_DIR` y se sirve con
+las mismas comprobaciones de permisos y cabeceras de integridad. La caché solo se lee; borrar un
+objeto del bucket produce 404 `file_missing`.
+
+`GET /system/queue` requiere `inventory.read`. `POST /system/queue/ping` y la consulta de estado
+requieren `settings.manage` (nivel 1). Sin Redis, el ping devuelve 503 `queue_unavailable`; con el
+broker disponible pero sin worker, la tarea permanece `PENDING` y se puede consultar. En modo
+`CELERY_TASK_ALWAYS_EAGER=true` la tarea se ejecuta en el proceso y el resultado queda en memoria
+(solo para pruebas). El worker y beat se arrancan con:
+
+```bash
+celery -A app.worker.celery_app worker --loglevel=info --concurrency=2
+celery -A app.worker.celery_app beat --loglevel=info
+```
+
+Beat evalúa alertas y envía informes programados cada 5 minutos. No ejecute a la vez el cron
+síncrono de versiones anteriores.
 
 Con `AURORA_TRACING_ENABLED=true`, cada respuesta incluye `X-Trace-ID` (32 hex) y se acepta el
 contexto W3C `traceparent` entrante; las peticiones y consultas SQL se exportan por OTLP o consola.
@@ -556,13 +587,31 @@ almacena audio ni se marca una llamada como completada sin confirmación o cierr
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/voice/status` | Motor, capacidades, idioma y garantía de que el audio no sale del dispositivo |
+| GET | `/voice/status` | STT del navegador, TTS configurado, voz, modelo, disponibilidad y salida de red |
 | POST | `/voice/query` | `{text, locale}`: interpreta la transcripción y consulta datos reales |
+| POST | `/voice/speak` | `{text, voice?, rate?}`: devuelve `audio/wav` o `audio/mpeg` según proveedor |
 
 Intenciones: `product_location`, `product_not_found`, `low_stock`, `open_tasks`, `open_incidents`,
 `pending_deliveries`, `summary`, `forbidden` y `unknown`. Cada respuesta incluye `answer` en español,
 `data` estructurado, `suggestions` y `confidence`. El reconocimiento y la síntesis usan la Web
 Speech API del navegador; el servidor no recibe audio ni guarda el historial. Los permisos se
 comprueban por intención: un operario puede consultar stock pero no el resumen global de tareas.
-El proveedor es intercambiable con `VOICE_PROVIDER` (el incluido es `aurora-builtin`, local y
-determinista).
+El proveedor de intenciones es intercambiable con `VOICE_PROVIDER` (el incluido es
+`aurora-builtin`, local y determinista).
+
+`POST /voice/speak` requiere `inventory.read`, acepta hasta `VOICE_TTS_MAX_CHARS` caracteres y
+devuelve las cabeceras `X-Voice-Provider`, `X-Voice-Name`, `X-Voice-Cached` y `X-Voice-Bytes`. Los
+proveedores son:
+
+| `VOICE_TTS_PROVIDER` | Formato | Red | Requisitos |
+|---|---|---|---|
+| `piper` (por defecto) | `audio/wav` | Ninguna | Modelo ONNX local (`VOICE_TTS_MODEL_PATH`) y `piper-tts` |
+| `edge` | `audio/mpeg` | Salida a Microsoft | `edge-tts`; sin clave |
+| `openai` | `audio/mpeg` | Salida a OpenAI | `VOICE_TTS_API_KEY` |
+| `browser` | — | Ninguna | El servidor devuelve 409 `tts_browser_only` y el frontend usa `SpeechSynthesis` |
+
+El audio se cachea por SHA-256 de proveedor, voz, velocidad y texto; no se guarda el texto en
+nombres de archivo ni en logs. Errores: 422 `empty_text`/`text_too_long`, 409 `tts_browser_only`,
+503 `tts_not_configured` y 502 `tts_provider_error`/`tts_empty_audio`. `VOICE_TTS_VOICE` debe
+corresponder al proveedor (por ejemplo `es_ES-davefx-medium` para Piper o `es-ES-ElviraNeural` para
+Edge). Con `piper`, el audio no sale del servidor y no se envía a terceros.

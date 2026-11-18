@@ -24,6 +24,8 @@ CHECKS: list[tuple[str, str, str, tuple[int, ...]]] = [
     ("Salud", "GET", "/healthz", (200,)),
     ("Información del sistema", "GET", "/api/v1/system/info", (200,)),
     ("Estado del servicio", "GET", "/api/v1/system/health", (200,)),
+    ("Almacenamiento documental", "GET", "/api/v1/system/storage", (200,)),
+    ("Cola de tareas", "GET", "/api/v1/system/queue", (200,)),
     ("Panel de control", "GET", "/api/v1/dashboard", (200,)),
     ("Productos", "GET", "/api/v1/products?limit=5", (200,)),
     ("Ubicaciones", "GET", "/api/v1/locations?limit=5", (200,)),

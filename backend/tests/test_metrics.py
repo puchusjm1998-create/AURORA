@@ -98,3 +98,37 @@ def test_storage_usage_counts_files_and_bytes(tmp_path):
     assert files == 2
     assert total == 150
     assert monitoring.storage_usage(tmp_path / "no-existe") == (0, 0)
+
+
+def test_storage_metrics_uses_s3_bucket_and_cache(monkeypatch):
+    monkeypatch.setattr(monitoring.settings, "storage_backend", "s3")
+    monkeypatch.setattr(
+        monitoring.s3_storage,
+        "iter_objects",
+        lambda prefix="": [("aurora/a.pdf", 120), ("aurora/b.png", 30)],
+    )
+    monkeypatch.setattr(monitoring, "_STORAGE_CACHE", (0.0, (0, 0)))
+    assert monitoring.storage_metrics() == (150, 2)
+    # La segunda llamada usa la caché y no vuelve a listar el bucket.
+    monkeypatch.setattr(
+        monitoring.s3_storage,
+        "iter_objects",
+        lambda prefix="": (_ for _ in ()).throw(AssertionError("no debe listar")),
+    )
+    assert monitoring.storage_metrics() == (150, 2)
+
+
+def test_storage_metrics_falls_back_to_cache_on_s3_error(monkeypatch):
+    monkeypatch.setattr(monitoring.settings, "storage_backend", "s3")
+    monkeypatch.setattr(monitoring, "_STORAGE_CACHE", (1.0, (999, 7)))
+    monkeypatch.setattr(
+        monitoring,
+        "_STORAGE_TTL",
+        0.0,
+    )
+    monkeypatch.setattr(
+        monitoring.s3_storage,
+        "iter_objects",
+        lambda prefix="": (_ for _ in ()).throw(RuntimeError("S3 caído")),
+    )
+    assert monitoring.storage_metrics() == (999, 7)

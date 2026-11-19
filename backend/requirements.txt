@@ -20,12 +20,23 @@ python-dateutil==4.0.0
 # Producción: PostgreSQL. El README explica cómo activarlo con DATABASE_URL.
 psycopg[binary]>=3.2,<4
 
+# Almacenamiento S3 compatible (AWS, MinIO, Ceph) y cola Redis + Celery
+boto3==1.44.5
+celery[redis]==5.7.0
+redis==6.4.0
+
+# Voz neuronal local (Piper) y alternativa Edge (Microsoft, sin clave)
+edge-tts==7.3.1
+piper-tts==1.8.0
+
 # OCR local de facturas (sin servicios externos)
 rapidocr-onnxruntime==1.4.4
 opencv-python-headless==5.1.0.95
 pymupdf==2.1.0
+pypdf==7.1.0
 
 # Pruebas
 pytest==9.2.0
 pytest-cov==7.1.0
 httpx==0.28.1
+moto[s3,server]==5.2.5

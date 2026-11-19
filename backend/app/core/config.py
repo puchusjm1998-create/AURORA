@@ -71,8 +71,69 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     # --- Storage ------------------------------------------------------------
+    # local: disco local; s3: cualquier API compatible con S3 (AWS, MinIO, Ceph…).
+    storage_backend: str = "local"  # local | s3
     storage_dir: Path = BACKEND_DIR / "data" / "storage"
+    storage_cache_dir: Path = BACKEND_DIR / "data" / "cache"
     max_upload_mb: int = 25
+    s3_bucket: str = ""
+    s3_prefix: str = "aurora"
+    s3_region: str = "eu-west-1"
+    s3_endpoint_url: str = ""
+    s3_access_key_id: str = ""
+    s3_secret_access_key: str = ""
+    s3_addressing_style: str = "path"  # path para MinIO/Ceph; virtual para AWS
+    s3_timeout: float = 30.0
+
+    @property
+    def s3_configured(self) -> bool:
+        return self.storage_backend.lower() == "s3" and bool(self.s3_bucket.strip())
+
+    # --- Cola de trabajos (Redis + Celery) ---------------------------------
+    redis_url: str = "redis://127.0.0.1:6379/0"
+    celery_broker_url: str = ""
+    celery_result_backend: str = ""
+    celery_task_always_eager: bool = False
+    celery_task_time_limit: int = 300
+
+    @property
+    def celery_broker(self) -> str:
+        return self.celery_broker_url.strip() or self.redis_url
+
+    @property
+    def celery_backend(self) -> str:
+        return self.celery_result_backend.strip() or self.redis_url
+
+    # --- Voz neuronal -------------------------------------------------------
+    # piper: voz neuronal local (ONNX, sin red ni clave);
+    # edge: voces neuronales de Microsoft Edge sin clave;
+    # openai: /audio/speech compatible con OpenAI (requiere clave);
+    # browser: SpeechSynthesis del navegador (sin audio en servidor).
+    voice_tts_provider: str = "piper"  # piper | edge | openai | browser
+    voice_tts_voice: str = "es_ES-davefx-medium"
+    voice_tts_model_path: Path = (
+        BACKEND_DIR / "data" / "models" / "es_ES-davefx-medium.onnx"
+    )
+    voice_tts_api_key: str = ""
+    voice_tts_model: str = "gpt-4o-mini-tts"
+    voice_tts_base_url: str = "https://api.openai.com/v1"
+    voice_tts_timeout: float = 30.0
+    voice_tts_max_chars: int = 1200
+    voice_tts_cache_dir: Path = BACKEND_DIR / "data" / "cache" / "voice"
+
+    @property
+    def voice_tts_configured(self) -> bool:
+        provider = self.voice_tts_provider.strip().lower()
+        if provider == "piper":
+            return (
+                self.voice_tts_model_path.is_file()
+                and self.voice_tts_model_path.with_suffix(".onnx.json").is_file()
+            )
+        if provider == "edge":
+            return True
+        if provider == "openai":
+            return bool(self.voice_tts_api_key.strip())
+        return False
 
     # --- Correo saliente (informes programados) -----------------------------
     smtp_host: str = ""
@@ -91,6 +152,21 @@ class Settings(BaseSettings):
     # --- Voz ----------------------------------------------------------------
     voice_provider: str = "aurora-builtin"
     voice_locale: str = "es-ES"
+
+    # --- Telefonía (Fase 8) -------------------------------------------------
+    # handoff: abre tel:/sip: en el dispositivo; webhook: origina la llamada en
+    # un proveedor SIP/API externo; disabled: no permite llamadas.
+    telephony_mode: str = "handoff"  # handoff | webhook | disabled
+    telephony_sip_domain: str = ""
+    telephony_sip_extension: str = ""
+    telephony_webhook_url: str = ""
+    telephony_webhook_token: str = ""
+    telephony_callback_token: str = ""
+    telephony_webhook_timeout: float = 10.0
+
+    @property
+    def telephony_can_originate(self) -> bool:
+        return self.telephony_mode == "webhook" and bool(self.telephony_webhook_url.strip())
 
     # --- Domain -------------------------------------------------------------
     warehouse_timezone: str = "Europe/Madrid"

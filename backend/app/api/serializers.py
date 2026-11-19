@@ -160,6 +160,7 @@ def employee_to_read(employee: Employee) -> EmployeeRead:
         status=employee.status,
         hire_date=employee.hire_date,
         phone=employee.phone,
+        weekly_hours=employee.weekly_hours,
         user_id=employee.user_id,
         created_at=employee.created_at,
     )

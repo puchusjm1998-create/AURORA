@@ -370,6 +370,28 @@ desactivar la propia cuenta.
 | GET | `/reports/movements.csv` | Libro de movimientos (`date_from`, `date_to`) |
 | GET | `/reports/movements.pdf` | Movimientos en PDF paginado (máximo 4.000 filas maquetadas) |
 | GET | `/reports/movements.xlsx` | Movimientos en Excel nativo, fechas y cantidades numéricas |
+| GET | `/reports/invoices.csv` | Facturación (`date_from`, `date_to`, `status`) |
+| GET | `/reports/invoices.pdf` | Facturación en PDF con importes, estado y conciliación |
+| GET | `/reports/invoices.xlsx` | Facturación en Excel con hoja Resumen y totales |
+| GET | `/reports/deliveries.csv` | Repartos (`date_from`, `date_to`, `status`) con destino, conductor y firma |
+| GET | `/reports/deliveries.pdf` | Repartos en PDF paginado |
+| GET | `/reports/deliveries.xlsx` | Repartos en Excel nativo |
+| GET | `/reports/employees.csv` | Plantilla (`active_only`): puesto, jornada, estado y cuenta |
+| GET | `/reports/employees.pdf` | Plantilla en PDF |
+| GET | `/reports/employees.xlsx` | Plantilla en Excel con total de jornada semanal |
+| GET | `/reports/incidents.csv` | Incidencias (`date_from`, `date_to`, `status`, `severity`, `limit`) |
+| GET | `/reports/incidents.pdf` | Incidencias en PDF: tipo, severidad, ubicación, responsable y resolución |
+| GET | `/reports/incidents.xlsx` | Incidencias en Excel nativo |
+| GET | `/reports/audit.csv` | Auditoría (`date_from`, `date_to`, `action`, `entity_type`, `actor`, `limit`) |
+| GET | `/reports/audit.pdf` | Auditoría en PDF sin los JSON de cambios, para revisión |
+| GET | `/reports/audit.xlsx` | Auditoría en Excel con columnas antes/después |
+
+`limit` está acotado a 20.000 filas (5.000 por defecto) para que una exportación no agote memoria.
+Los tres informes de auditoría exigen **a la vez** `reports.export` y `audit.read`: un responsable
+con exportación de informes no puede descargar la auditoría si su rol no la tiene.
+Los filtros de fecha de facturas usan `invoice_date` (formato `AAAA-MM-DD`); los de repartos,
+`created_at` en ISO-8601 UTC. Todos los informes requieren `reports.export`. El CSV incluye BOM y
+separador `;`; PDF y Excel comparten los datos y el formato español de números y fechas.
 
 ### Informes programados
 
@@ -422,9 +444,40 @@ La auditoría es append-only: triggers de base de datos rechazan `UPDATE` y `DEL
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/system/info` | Versión, entorno, zona horaria, fase, implementado y pendiente |
-| GET | `/system/health` | Comprobación de base de datos y almacenamiento |
+| GET | `/system/health` | Comprobación de base de datos |
+| GET | `/system/storage` | Backend local/S3, bucket, endpoint, prefijo y accesibilidad real |
+| GET | `/system/queue` | Redis, disponibilidad del broker y worker, modo eager y mensaje |
+| POST | `/system/queue/ping` | Encola `aurora.ping` (`settings.manage`) y devuelve `task_id` |
+| GET | `/system/queue/{task_id}` | Estado Celery, resultado o error de la tarea |
 
 `/healthz` (fuera de `/api`) es el endpoint ligero para balanceadores y contenedores.
+
+### Almacenamiento y cola
+
+`GET /system/storage` requiere `inventory.read` y devuelve
+`{backend, bucket, prefix, endpoint, reachable, error}`. Con `STORAGE_BACKEND=local` el bucket es
+`null` y `reachable` es `true`; con `s3`, el backend ejecuta `list_objects_v2` para comprobar que el
+bucket y las credenciales funcionan. Un error de S3 no tumba la API: se devuelve `reachable=false`
+con el motivo, y las subidas fallan con 503 `storage_unavailable` sin dejar el fichero local.
+
+Los originales de factura, las firmas de entrega y cualquier documento usan la misma clave
+relativa en los dos backends. La descarga desde S3 se cachea en `STORAGE_CACHE_DIR` y se sirve con
+las mismas comprobaciones de permisos y cabeceras de integridad. La caché solo se lee; borrar un
+objeto del bucket produce 404 `file_missing`.
+
+`GET /system/queue` requiere `inventory.read`. `POST /system/queue/ping` y la consulta de estado
+requieren `settings.manage` (nivel 1). Sin Redis, el ping devuelve 503 `queue_unavailable`; con el
+broker disponible pero sin worker, la tarea permanece `PENDING` y se puede consultar. En modo
+`CELERY_TASK_ALWAYS_EAGER=true` la tarea se ejecuta en el proceso y el resultado queda en memoria
+(solo para pruebas). El worker y beat se arrancan con:
+
+```bash
+celery -A app.worker.celery_app worker --loglevel=info --concurrency=2
+celery -A app.worker.celery_app beat --loglevel=info
+```
+
+Beat evalúa alertas y envía informes programados cada 5 minutos. No ejecute a la vez el cron
+síncrono de versiones anteriores.
 
 Con `AURORA_TRACING_ENABLED=true`, cada respuesta incluye `X-Trace-ID` (32 hex) y se acepta el
 contexto W3C `traceparent` entrante; las peticiones y consultas SQL se exportan por OTLP o consola.
@@ -468,17 +521,119 @@ duplicados (409 `duplicate_assignment`) y solapes del mismo empleado (409 `shift
 El plan indica `assigned_count`, `missing` y `uncovered_shifts`; la cobertura se controla por
 plantilla y día, sin ocultar los huecos.
 
+## Tarjetas NFC
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/nfc/cards` | Lista tarjetas (`employee_id`, `status`, paginación); nunca devuelve el token |
+| POST | `/nfc/cards` | Emite una tarjeta (`attendance.manage`); el token se muestra una sola vez |
+| GET | `/nfc/cards/{id}` | Consulta una tarjeta sin token |
+| POST | `/nfc/cards/{id}/revoke` | Revoca la tarjeta; deja de fichar de inmediato |
+| DELETE | `/nfc/cards/{id}` | Elimina una tarjeta ya revocada |
+| POST | `/nfc/tap` | Ficha leyendo el token (`attendance.clock`); `action` = `auto`, `clock_in`, `clock_out`, `break_start` o `break_end` |
+| GET | `/nfc/state/{employee_id}` | Estado derivado (`out`/`in`/`break`) del trabajador |
+
+El token tiene el formato `AUR-NFC-…`; en la base de datos solo queda SHA-256 y los últimos cuatro
+caracteres. El frontend `/tarjetas` graba el token en una etiqueta NDEF con Web NFC y `/lector`
+acepta tanto Web NFC como un lector USB en modo teclado (token + Enter). La lectura exige HTTPS
+(o localhost) y un navegador con Web NFC; el lector USB no necesita API del navegador. Hay una tarjeta activa por trabajador (409 `employee_has_active_card`). Una tarjeta
+revocada devuelve 409 `card_revoked`; un token desconocido, 404. `auto` elige la transición natural
+(entrada si está fuera, salida si trabaja, fin de pausa si está en pausa) y cualquier secuencia
+inválida devuelve 409 `invalid_sequence`. El trabajador de nivel 4 solo puede usar su propia
+tarjeta (403 si no). Cada lectura crea un fichaje append-only con `source="nfc"` y se audita.
+
+## Bolsa de horas
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/hours-bank` | Saldo por trabajador y totales (`date_from`, `date_to`, máx. 93 días) |
+| GET | `/hours-bank/me` | Saldo propio (cualquier usuario con `attendance.clock` y ficha) |
+| GET | `/hours-bank/adjustments` | Ajustes del periodo (`employee_id`, fechas) |
+| POST | `/hours-bank/adjustments` | Ajuste manual (`attendance.manage`), minutos ≠ 0 y motivo |
+| DELETE | `/hours-bank/adjustments/{id}` | Elimina un ajuste y audita el borrado |
+
+El saldo es `trabajado − teórico + ajustes`. El teórico usa `employees.weekly_hours` (40 por
+defecto, configurable al crear o modificar la ficha) prorrateado por los días del periodo dentro de
+cada semana. Un saldo positivo son horas a favor del trabajador; uno negativo, pendientes de
+compensar. Fechas invertidas devuelven 422 `invalid_range`; periodos de más de 93 días, 422
+`range_too_long`; ajustes a más de un mes en el futuro o de más de un año atrás, 409
+`invalid_effective_date`. Los fichajes no se modifican: los ajustes son la vía justificada.
+
+## Prueba de entrega: GPS y firma
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/deliveries/mine` | Repartos asignados al conductor (`deliveries.track`) |
+| POST | `/deliveries/{id}/tracking` | Registra una posición GPS durante el tránsito |
+| GET | `/deliveries/{id}/tracking` | Puntos, distancia Haversine y antigüedad de la última señal |
+| GET | `/deliveries/{id}/tracking/latest` | Última posición o 404 |
+| POST | `/deliveries/{id}/signature` | Firma multipart (`file` PNG, `signer_name`, `mark_delivered`) |
+| GET | `/deliveries/{id}/signature` | Metadatos y verificación SHA-256 de la firma |
+| GET | `/deliveries/{id}/signature/image` | Imagen PNG de la firma |
+
+El nivel 4 solo puede operar sobre repartos cuyo `driver_employee_id` sea su ficha; niveles 1-3 y
+auditoría consultan todos. Solo se admite GPS y firma en estado `in_transit` (409
+`delivery_not_in_transit`). Los puntos GPS y las firmas son append-only: no hay endpoints de
+edición ni borrado y los triggers de base de datos los protegen.
+
+La distancia descarta segmentos con velocidad implícita superior a 55 m/s, saltos de más de 5 km
+o precisión declarada peor de 500 m; el punto se conserva, pero no infla la distancia. La firma se
+valida como PNG real (Pillow), entre 50×30 y 4000×4000 px y máximo 2 MB; se guarda con SHA-256 y
+una segunda firma devuelve 409 `delivery_already_signed`. Si `mark_delivered=true`, el reparto pasa
+a `delivered`, se sella la hora y los palés a `shipped` en la misma transacción. La descarga
+incluye `X-Content-SHA256` y `Cache-Control: private, no-store`.
+
+## Llamadas y telefonía
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/calls/config` | Modo, dominio SIP, proveedor configurado y mensaje operativo |
+| GET | `/calls` | Historial paginado (`status`, `search`) |
+| GET | `/calls/{id}` | Detalle con enlaces `tel:`, `sip:` y `dial_uri` |
+| POST | `/calls` | Registra la llamada y, en modo webhook, la envía al proveedor |
+| PATCH | `/calls/{id}` | `in_progress`, `completed` o `failed` con resultado |
+| POST | `/calls/callback` | Confirmación del proveedor (`X-Telephony-Token` o Bearer) |
+
+Requiere `calls.manage` (niveles 1-3). El teléfono se normaliza a dígitos con prefijo `+`
+opcional (7-15 dígitos; 422 `invalid_phone`). En modo `handoff` el servidor no llama: devuelve
+`tel:` y, si `TELEPHONY_SIP_DOMAIN` está definido, `sip:` para que el softphone del dispositivo
+abra la llamada. En modo `webhook` se envía `to`, `contact_name`, `purpose`, `reference` y
+`extension` al proveedor; sin URL se devuelve 503 `telephony_not_configured`. Un fallo del
+proveedor deja la llamada `failed`, auditada, y devuelve 502 `telephony_provider_error`. El
+callback acepta `reference` (ID interno) o `provider_call_id`, actualiza el estado y es idempotente
+si repite el mismo estado/resultado; una llamada ya cerrada con otro estado devuelve 409
+`call_closed`. Sin `TELEPHONY_CALLBACK_TOKEN` responde 503; con token incorrecto, 401. No se
+almacena audio ni se marca una llamada como completada sin confirmación o cierre humano.
+
 ## AURORA Voice
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/voice/status` | Motor, capacidades, idioma y garantía de que el audio no sale del dispositivo |
+| GET | `/voice/status` | STT del navegador, TTS configurado, voz, modelo, disponibilidad y salida de red |
 | POST | `/voice/query` | `{text, locale}`: interpreta la transcripción y consulta datos reales |
+| POST | `/voice/speak` | `{text, voice?, rate?}`: devuelve `audio/wav` o `audio/mpeg` según proveedor |
 
 Intenciones: `product_location`, `product_not_found`, `low_stock`, `open_tasks`, `open_incidents`,
 `pending_deliveries`, `summary`, `forbidden` y `unknown`. Cada respuesta incluye `answer` en español,
 `data` estructurado, `suggestions` y `confidence`. El reconocimiento y la síntesis usan la Web
 Speech API del navegador; el servidor no recibe audio ni guarda el historial. Los permisos se
 comprueban por intención: un operario puede consultar stock pero no el resumen global de tareas.
-El proveedor es intercambiable con `VOICE_PROVIDER` (el incluido es `aurora-builtin`, local y
-determinista).
+El proveedor de intenciones es intercambiable con `VOICE_PROVIDER` (el incluido es
+`aurora-builtin`, local y determinista).
+
+`POST /voice/speak` requiere `inventory.read`, acepta hasta `VOICE_TTS_MAX_CHARS` caracteres y
+devuelve las cabeceras `X-Voice-Provider`, `X-Voice-Name`, `X-Voice-Cached` y `X-Voice-Bytes`. Los
+proveedores son:
+
+| `VOICE_TTS_PROVIDER` | Formato | Red | Requisitos |
+|---|---|---|---|
+| `piper` (por defecto) | `audio/wav` | Ninguna | Modelo ONNX local (`VOICE_TTS_MODEL_PATH`) y `piper-tts` |
+| `edge` | `audio/mpeg` | Salida a Microsoft | `edge-tts`; sin clave |
+| `openai` | `audio/mpeg` | Salida a OpenAI | `VOICE_TTS_API_KEY` |
+| `browser` | — | Ninguna | El servidor devuelve 409 `tts_browser_only` y el frontend usa `SpeechSynthesis` |
+
+El audio se cachea por SHA-256 de proveedor, voz, velocidad y texto; no se guarda el texto en
+nombres de archivo ni en logs. Errores: 422 `empty_text`/`text_too_long`, 409 `tts_browser_only`,
+503 `tts_not_configured` y 502 `tts_provider_error`/`tts_empty_audio`. `VOICE_TTS_VOICE` debe
+corresponder al proveedor (por ejemplo `es_ES-davefx-medium` para Piper o `es-ES-ElviraNeural` para
+Edge). Con `piper`, el audio no sale del servidor y no se envía a terceros.

@@ -219,7 +219,8 @@ registros, nunca de un campo «estado actual» que pueda desincronizarse. Las re
 validan en el servidor, incluida la compatibilidad con registros posteriores cuando un responsable
 inserta un fichaje antiguo. El nivel 4 puede fichar únicamente su propia ficha; los responsables
 pueden registrar fichajes ajenos (por ejemplo, una tarjeta olvidada) y queda constancia de quién lo
-hizo. La planificación de turnos y las tarjetas NFC siguen pendientes y no se simulan.
+hizo. La planificación de turnos y las tarjetas NFC se añadieron en fases posteriores (D-34, D-37 y
+D-42) y tampoco se simulan.
 
 ## D-25. Optimización como sugerencia con geometría declarada
 
@@ -451,3 +452,231 @@ hay bolsa de horas, fichaje NFC ni firma de turno. Un turno no cruza medianoche 
 horario invertido). Los cambios de días no se aplican si dejarían asignaciones huérfanas: hay que
 retirarlas primero. La cobertura es informativa: el sistema avisa del hueco, no bloqueaguardar el
 plan.
+
+
+---
+
+## D-37 · Tarjeta NFC como token opaco con hash en servidor
+
+**Decisión.** Una tarjeta NFC es un token aleatorio (`AUR-NFC-…`, generado con `secrets`) asociado
+a un único empleado. En la base de datos solo se guarda su SHA-256 y los últimos cuatro caracteres;
+el token completo se devuelve **una sola vez** al emitirlo. Una tarjeta activa por empleado; para
+sustituirla hay que revocarla. La lectura (`POST /nfc/tap`) valida el token, el estado de la
+tarjeta y del empleado, y aplica las mismas reglas de secuencia que el fichaje web. El fichaje
+queda con `source="nfc"` y etiqueta del lector.
+
+**Por qué.** Un identificador de tarjeta legible no es un secreto; guardar el token en claro
+permitiría fichar por cualquiera con acceso a la base de datos o a una copia de seguridad. El hash
+hace que una copia filtrada no sirva para fichar. Mostrar el token una sola vez evita que quede en
+pantallas, listados o registros de auditoría. Revocar en lugar de borrar conserva la trazabilidad.
+
+**Límites.** El token se transmite al lector o al trabajador por un canal que el sistema no
+controla; no hay criptografía en hardware ni atestación de tarjeta. La escritura y lectura física
+se hacen con Web NFC o con un lector USB HID (D-42); siguen siendo un token opaco, no una tarjeta
+bancaria. Una tarjeta perdida puede fichar hasta que un responsable la revoque. El token no caduca
+por tiempo; se rota revocando y emitiendo otra.
+
+---
+
+## D-38 · Bolsa de horas calculada, nunca almacenada
+
+**Decisión.** El saldo se calcula al consultar: tiempo fichado en el periodo menos la jornada
+teórica del contrato (`employees.weekly_hours` prorrateada por días del periodo) más los ajustes
+manuales. Los ajustes tienen fecha efectiva, minutos distintos de cero y motivo obligatorio, y se
+auditan al crear y eliminar. Los fichajes no se editan: una corrección es un fichaje nuevo. El
+periodo máximo es de 93 días y el saldo puede ser negativo (horas pendientes de compensar).
+
+**Por qué.** Un saldo almacenado se desincroniza en cuanto se corrige un fichaje o cambia el
+contrato. Calcularlo sobre el histórico inmutable hace que cualquier consulta sea reproducible y
+auditable. Separar los ajustes permite justificar compensaciones sin falsear el fichaje. El
+prorrateo por días evita comparar un periodo parcial contra una semana completa.
+
+**Límites.** El contrato semanal es un único número por empleado; no hay calendario laboral,
+vacaciones, festivos ni turnos rotativos que ajusten la jornada teórica. El prorrateo es lineal
+(`weekly_hours × días / 7`), por lo que un festivo no se descuenta automáticamente. Los ajustes
+los introduce un responsable con `attendance.manage`; no hay flujo de aprobación del trabajador.
+El saldo no genera nómina ni pago: es un indicador operativo.
+
+
+---
+
+## D-39 · GPS append-only con filtro de plausibilidad
+
+**Decisión.** Cada posición enviada por el conductor se guarda como un punto inmutable con hora del
+servidor, precisión, velocidad y rumbo opcionales. La distancia se calcula con Haversine entre
+puntos consecutivos y se descartan segmentos con velocidad implícita mayor de 55 m/s, saltos de más
+de 5 km o precisión peor de 500 m. Los puntos descartados para la distancia siguen visibles en el
+historial. No hay endpoints de edición ni borrado y los triggers bloquean UPDATE y DELETE.
+
+**Por qué.** El GPS del navegador comete errores y puede «teletransportar» el vehículo; sumar todos
+los saltos produciría kilómetros falsos. Separar el registro (evidencia) del cálculo (distancia)
+permite auditar el dato original sin aceptar su ruido. La hora se sella en servidor para que un
+reloj manipulado en el móvil no cambie la secuencia.
+
+**Límites.** Solo se comparte ubicación mientras `/mi-reparto` está abierto y el usuario concede
+permiso; no hay seguimiento en segundo plano ni aplicación nativa. La distancia es en línea recta
+entre puntos, no la ruta real por carretera, y con pocos puntos subestima curvas. La precisión
+declarada por el navegador no se puede verificar. El modo `source="signature"` registra la
+coordenada de la firma si el navegador la entrega.
+
+---
+
+## D-40 · Firma de entrega como evidencia verificable
+
+**Decisión.** La firma se captura en un canvas y se sube como PNG multipart; el servidor valida que
+sea una imagen real con Pillow, la guarda en almacenamiento content-addressed y registra nombre,
+documento opcional, usuario, IP, user-agent, fecha y SHA-256. Una entrega solo admite una firma; no
+se puede editar ni borrar. La consulta recalcula el hash del archivo y publica `integrity`
+(`ok`, `file_missing`, `mismatch`). Si se solicita, la firma marca el reparto como entregado y los
+palés como enviados en la misma transacción.
+
+**Por qué.** Una firma dibujada solo en el navegador no es prueba de nada. Guardar el PNG original
+con su hash y una verificación posterior permite detectar alteraciones y defender la entrega ante
+una reclamación. Mantener la ruta de entrega `/deliver` permite cerrar repartos antiguos o sin
+firma, pero la UI del conductor usa la firma como prueba principal.
+
+**Límites.** No hay certificado digital ni firma criptográfica del receptor; es una firma manuscrita
+escaneada. El nombre y el documento los teclea el conductor, no se validan contra una identidad.
+No se firma en un dispositivo externo ni se sella con hardware seguro. El SHA-256 prueba integridad
+del archivo, no autoría. La entrega puede completarse sin firma desde la ruta administrativa si el
+reparto ya estaba en tránsito.
+
+---
+
+## D-41 · Telefonía con handoff o webhook, nunca simulada
+
+**Decisión.** Hay tres modos explícitos: `handoff` (por defecto), `webhook` y `disabled`. En
+`handoff` el servidor construye `tel:` y, si hay dominio SIP, `sip:`; la llamada la abre el
+softphone o el marcador del dispositivo. En `webhook` el servidor envía la orden a un endpoint
+configurado y solo registra `queued`/`in_progress` si el proveedor responde 2xx; el ID del
+proveedor se guarda y un fallo deja la llamada `failed` auditada. Sin URL, la API responde 503 y no
+crea una llamada falsa.
+
+**Por qué.** El sandbox no tiene operador SIP ni credenciales, y fingir una llamada sería peor que
+no tenerla. El handoff es útil de inmediato en cualquier móvil o softphone; el webhook permite
+conectar un proveedor real sin cambiar la UI. Estados y resultados se registran para auditoría, y
+la interfaz muestra el modo activo para que nadie crea que el servidor está llamando cuando no lo
+hace.
+
+**Límites.** No se implementa la pila SIP ni RTP: no hay audio, ni grabación, ni transferencia,
+ni conferencia. El handoff depende de que el dispositivo tenga un softphone o marcador y de que el
+navegador permita abrir `sip:`. El adaptador webhook se probó contra un receptor HTTP local; un
+proveedor real puede exigir otro esquema de autenticación o campos adicionales. El estado de una
+llamada `handoff` no se actualiza automáticamente: un responsable la cierra con el resultado.
+
+
+## D-42 · Web NFC y lector USB HID, sin SDK propietario
+
+**Decisión.** La grabación y lectura de etiquetas se hace con la API Web NFC del navegador
+(Chrome Android sobre HTTPS) o con un lector USB que emula teclado y escribe el token. El backend
+no cambia: sigue recibiendo `POST /nfc/tap` con el token opaco y aplicando permisos, secuencia y
+auditoría. No se incluye un SDK de fabricante ni se guarda el token en `localStorage`.
+
+**Por qué.** Web NFC es un estándar del navegador y permite grabar una etiqueta NDEF sin instalar
+software; el modo HID cubre lectores de escritorio y dispositivos sin Web NFC. La alternativa de
+un lector propietario añadiría dependencias, drivers y una superficie de ataque que no aporta
+seguridad al token.
+
+**Límites.** Web NFC no existe en Safari/iOS y requiere contexto seguro. El lector HID debe
+configurarse para escribir el token AURORA, no el UID crudo de la etiqueta. La entrada manual del
+token sigue siendo posible y se audita igual. El navegador no puede impedir que alguien fotografíe
+una etiqueta; la revocación es la respuesta operativa.
+
+## D-43 · GPS adaptativo y pantalla activa, sin prometer segundo plano
+
+**Decisión.** El seguimiento GPS envía cada 12 s si el vehículo se ha movido ≥25 m y cada 45 s si
+está parado, con velocidad y rumbo cuando el dispositivo los proporciona. Mientras está activo
+solicita Screen Wake Lock y lo recupera al volver a primer plano. El recorrido se dibuja en SVG
+con los puntos reales, sin teselas externas.
+
+**Por qué.** Ahorra batería y datos sin perder la traza; la pantalla activa evita que el móvil
+suspenda la pestaña en una ruta. El SVG funciona sin conexión y no envía coordenadas a un servicio
+de mapas.
+
+**Límites.** Si el sistema operativo cierra la pestaña o bloquea la pantalla, el navegador deja de
+ejecutar `watchPosition`; no hay seguimiento en segundo plano real. Los puntos se registran con la
+hora del servidor al recibirlos, no con la hora del dispositivo, para no aceptar cronologías
+manipuladas.
+
+---
+
+## D-44 · S3 desde boto3 con la misma clave relativa que el disco local
+
+**Decisión.** `STORAGE_BACKEND` selecciona `local` o `s3`; el resto del código sigue guardando una
+clave relativa (`invoices/AAAA/MM/DD/...`, `deliveries/...`) y un SHA-256. El adaptador S3 usa
+boto3, firma v4 y `addressing_style` configurable. La descarga desde S3 se cachea en
+`STORAGE_CACHE_DIR` y el archivo temporal de subida se borra solo después de que S3 confirme.
+
+**Por qué.** Mantener la misma clave permite migrar documentos entre disco y bucket sin tocar la
+base de datos, y boto3 cubre AWS, MinIO y Ceph sin SDK específico. No se implementa una capa
+propia sobre HTTP porque la firma SigV4 y los reintentos son fáciles de equivocar.
+
+**Límites.** Las pruebas usan `moto` (API S3 emulada), no un clúster real. No hay cifrado del lado
+del cliente, lifecycle, versionado ni object lock: se configuran en el bucket y deben probarse en
+la infraestructura de destino. Sin `list_objects_v2` el bucket se considera inaccesible. La caché
+de lectura no se invalida por eventos: si un objeto cambia en el bucket, hay que borrar la entrada
+local o reiniciar el servicio.
+
+---
+
+## D-45 · Celery sobre Redis para trabajo programado, con estado visible
+
+**Decisión.** Redis 7 es el broker y backend de resultados; un worker prefork y beat ejecutan
+`aurora.evaluate_alerts` y `aurora.send_scheduled_reports` cada 5 minutos. La API expone
+`/system/queue` y una tarea `aurora.ping` para verificar broker y worker sin depender de logs. En
+pruebas se usa `CELERY_TASK_ALWAYS_EAGER=true`.
+
+**Por qué.** Las tareas de almacén siguen siendo síncronas porque el usuario espera el resultado,
+pero la evaluación periódica y los envíos SMTP no deben bloquear una petición ni depender de que
+alguien recuerde un cron. El estado visible evita el fallo silencioso: si Redis no responde o no hay
+worker, `/sistema` lo dice y el ping devuelve 503.
+
+**Límites.** El sandbox se validó con Redis 7.2 compilado en local y un worker real; no se probaron
+TLS, Sentinel, Cluster ni la política de memoria de un proveedor gestionado. En modo eager los
+resultados viven en memoria del proceso y se pierden al reiniciar. Beat debe ejecutarse una sola
+instancia: dos beats duplicarían los envíos. Si convive con el cron antiguo, también habrá duplicados.
+
+---
+
+## D-46 · Voz neuronal Piper local como opción por defecto
+
+**Decisión.** El servidor sintetiza con Piper (`piper-tts`, ONNX) usando el modelo español
+`es_ES-davefx-medium`, cachea el WAV por SHA-256 de proveedor+voz+velocidad+texto y expone
+`/voice/speak`. Edge y OpenAI quedan como alternativas explícitas; si el proveedor no está
+disponible, el frontend usa `SpeechSynthesis`. El modelo no se versiona en Git: se descarga con
+`scripts/fetch_voice_model.py` y se verifica su hash.
+
+**Por qué.** El sandbox no tiene salida a Microsoft ni a OpenAI, pero sí puede ejecutar ONNX en CPU.
+Una voz local hace que la función sea real y verificable de punta a punta, sin claves ni datos que
+salgan del servidor. La caché evita repetir síntesis de frases frecuentes y el formato WAV no exige
+un codificador adicional.
+
+**Límites.** Es una voz sintética, no un clon ni una voz humana; la calidad depende del modelo y no
+se comparó formalmente con Edge/OpenAI. La descarga inicial es de 180 MB (bundle) y el ONNX ocupa
+61 MB; el despliegue necesita ese espacio y el volumen `aurora-models`. Piper no está disponible en
+todos los entornos sin `onnxruntime`; en ese caso `/voice/status` lo declara y no se finge audio.
+El texto sintetizado no se guarda, solo el hash de la caché.
+
+---
+
+## D-47 · Informes de negocio y copias S3 de ida y vuelta
+
+**Decisión.** Facturación, repartos y plantilla usan el mismo `ReportTable` que inventario y
+movimientos, de modo que CSV, PDF y Excel salen de una única consulta y comparten formatos,
+totales y permisos (`reports.export`). Las copias de seguridad detectan `STORAGE_BACKEND=s3`,
+descargan el bucket a `storage.tar.gz` y la restauración vuelve a subir cada objeto con su clave,
+tipo MIME y SHA-256. La migración local → S3 compara tamaño y hash con los metadatos antes de
+subir y verifica descargando el objeto.
+
+**Por qué.** Un informe solo de pantalla obliga a copiar datos a mano y no sirve para contabilidad.
+Una copia que ignora S3 daría una falsa sensación de seguridad: el manifiesto sería correcto pero
+los documentos no estarían dentro. Mantener una sola tabla de datos evita que PDF y Excel
+discrepen.
+
+**Límites.** La copia S3 recorre el bucket completo y descarga cada objeto; con volúmenes grandes
+debe ejecutarse en una ventana de baja actividad y el tar resultante ocupa lo mismo que los
+documentos. No se copia el modelo Piper ni la caché (reconstruibles). La migración no borra los
+originales locales y no reescribe URLs: si un objeto se borra del bucket, la copia local no se usa
+automáticamente. Los informes cubren inventario, movimientos, facturación, repartos, plantilla, incidencias y
+auditoría; la auditoría se acota a 20.000 filas por exportación y el PDF omite los JSON de cambios
+para seguir siendo legible.

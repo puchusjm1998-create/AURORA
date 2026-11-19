@@ -16,7 +16,12 @@ from app.core.errors import ValidationError
 from app.core.timeutils import madrid_day_bounds_utc, utcnow
 from app.services.report_data import (
     MOVEMENT_LABELS,
+    audit_table,
+    deliveries_table,
+    employees_table,
+    incidents_table,
     inventory_table,
+    invoices_table,
     movements_table,
     table_csv_bytes,
 )
@@ -447,6 +452,270 @@ def movements_xlsx(
     table = movements_table(db, date_from, date_to)
     return _report_response(
         f"aurora-movimientos-{date.today().isoformat()}.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        render_xlsx(table),
+    )
+
+
+@router.get("/reports/invoices.csv", summary="Informe de facturación (CSV)")
+def invoices_report(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
+    date_from: date | None = None,
+    date_to: date | None = None,
+    status: str | None = None,
+) -> Response:
+    table = invoices_table(db, date_from, date_to, status)
+    return _report_response(
+        f"aurora-facturas-{date.today().isoformat()}.csv",
+        "text/csv; charset=utf-8",
+        table_csv_bytes(table),
+    )
+
+
+@router.get("/reports/invoices.pdf", summary="Informe de facturación (PDF)")
+def invoices_pdf(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
+    date_from: date | None = None,
+    date_to: date | None = None,
+    status: str | None = None,
+) -> Response:
+    table = select_columns(
+        invoices_table(db, date_from, date_to, status), [0, 1, 2, 4, 7, 8, 9, 10, 11]
+    )
+    return _report_response(
+        f"aurora-facturas-{date.today().isoformat()}.pdf",
+        "application/pdf",
+        render_pdf(table),
+    )
+
+
+@router.get("/reports/invoices.xlsx", summary="Informe de facturación (Excel)")
+def invoices_xlsx(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
+    date_from: date | None = None,
+    date_to: date | None = None,
+    status: str | None = None,
+) -> Response:
+    table = invoices_table(db, date_from, date_to, status)
+    return _report_response(
+        f"aurora-facturas-{date.today().isoformat()}.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        render_xlsx(table),
+    )
+
+
+@router.get("/reports/deliveries.csv", summary="Informe de repartos (CSV)")
+def deliveries_report(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    status: str | None = None,
+) -> Response:
+    table = deliveries_table(db, date_from, date_to, status)
+    return _report_response(
+        f"aurora-repartos-{date.today().isoformat()}.csv",
+        "text/csv; charset=utf-8",
+        table_csv_bytes(table),
+    )
+
+
+@router.get("/reports/deliveries.pdf", summary="Informe de repartos (PDF)")
+def deliveries_pdf(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    status: str | None = None,
+) -> Response:
+    table = select_columns(
+        deliveries_table(db, date_from, date_to, status), [0, 1, 2, 4, 5, 7, 8, 9, 10]
+    )
+    return _report_response(
+        f"aurora-repartos-{date.today().isoformat()}.pdf",
+        "application/pdf",
+        render_pdf(table),
+    )
+
+
+@router.get("/reports/deliveries.xlsx", summary="Informe de repartos (Excel)")
+def deliveries_xlsx(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    status: str | None = None,
+) -> Response:
+    table = deliveries_table(db, date_from, date_to, status)
+    return _report_response(
+        f"aurora-repartos-{date.today().isoformat()}.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        render_xlsx(table),
+    )
+
+
+@router.get("/reports/employees.csv", summary="Informe de plantilla (CSV)")
+def employees_report(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
+    active_only: bool = False,
+) -> Response:
+    table = employees_table(db, active_only)
+    return _report_response(
+        f"aurora-plantilla-{date.today().isoformat()}.csv",
+        "text/csv; charset=utf-8",
+        table_csv_bytes(table),
+    )
+
+
+@router.get("/reports/employees.pdf", summary="Informe de plantilla (PDF)")
+def employees_pdf(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
+    active_only: bool = False,
+) -> Response:
+    table = select_columns(employees_table(db, active_only), [0, 1, 2, 3, 4, 5, 6, 8])
+    return _report_response(
+        f"aurora-plantilla-{date.today().isoformat()}.pdf",
+        "application/pdf",
+        render_pdf(table),
+    )
+
+
+@router.get("/reports/employees.xlsx", summary="Informe de plantilla (Excel)")
+def employees_xlsx(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
+    active_only: bool = False,
+) -> Response:
+    table = employees_table(db, active_only)
+    return _report_response(
+        f"aurora-plantilla-{date.today().isoformat()}.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        render_xlsx(table),
+    )
+
+
+@router.get("/reports/incidents.csv", summary="Informe de incidencias (CSV)")
+def incidents_report(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    status: str | None = None,
+    severity: str | None = None,
+    limit: int = Query(5000, ge=1, le=20000),
+) -> Response:
+    table = incidents_table(db, date_from, date_to, status, severity, limit)
+    return _report_response(
+        f"aurora-incidencias-{date.today().isoformat()}.csv",
+        "text/csv; charset=utf-8",
+        table_csv_bytes(table),
+    )
+
+
+@router.get("/reports/incidents.pdf", summary="Informe de incidencias (PDF)")
+def incidents_pdf(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    status: str | None = None,
+    severity: str | None = None,
+    limit: int = Query(5000, ge=1, le=20000),
+) -> Response:
+    table = incidents_table(db, date_from, date_to, status, severity, limit)
+    table = select_columns(table, [0, 1, 2, 3, 4, 6, 7, 10, 12, 14])
+    return _report_response(
+        f"aurora-incidencias-{date.today().isoformat()}.pdf",
+        "application/pdf",
+        render_pdf(table),
+    )
+
+
+@router.get("/reports/incidents.xlsx", summary="Informe de incidencias (Excel)")
+def incidents_xlsx(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    status: str | None = None,
+    severity: str | None = None,
+    limit: int = Query(5000, ge=1, le=20000),
+) -> Response:
+    table = incidents_table(db, date_from, date_to, status, severity, limit)
+    return _report_response(
+        f"aurora-incidencias-{date.today().isoformat()}.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        render_xlsx(table),
+    )
+
+
+@router.get("/reports/audit.csv", summary="Informe de auditoría (CSV)")
+def audit_report(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
+    __: User = Depends(require_permission(PermissionCode.AUDIT_READ)),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    action: str | None = None,
+    entity_type: str | None = None,
+    actor: str | None = None,
+    limit: int = Query(5000, ge=1, le=20000),
+) -> Response:
+    table = audit_table(
+        db, date_from, date_to, action, entity_type, actor, limit
+    )
+    return _report_response(
+        f"aurora-auditoria-{date.today().isoformat()}.csv",
+        "text/csv; charset=utf-8",
+        table_csv_bytes(table),
+    )
+
+
+@router.get("/reports/audit.pdf", summary="Informe de auditoría (PDF)")
+def audit_pdf(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
+    __: User = Depends(require_permission(PermissionCode.AUDIT_READ)),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    action: str | None = None,
+    entity_type: str | None = None,
+    actor: str | None = None,
+    limit: int = Query(5000, ge=1, le=20000),
+) -> Response:
+    table = select_columns(
+        audit_table(db, date_from, date_to, action, entity_type, actor, limit),
+        [0, 1, 2, 3, 4, 5],
+    )
+    return _report_response(
+        f"aurora-auditoria-{date.today().isoformat()}.pdf",
+        "application/pdf",
+        render_pdf(table),
+    )
+
+
+@router.get("/reports/audit.xlsx", summary="Informe de auditoría (Excel)")
+def audit_xlsx(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PermissionCode.REPORTS_EXPORT)),
+    __: User = Depends(require_permission(PermissionCode.AUDIT_READ)),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    action: str | None = None,
+    entity_type: str | None = None,
+    actor: str | None = None,
+    limit: int = Query(5000, ge=1, le=20000),
+) -> Response:
+    table = audit_table(
+        db, date_from, date_to, action, entity_type, actor, limit
+    )
+    return _report_response(
+        f"aurora-auditoria-{date.today().isoformat()}.xlsx",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         render_xlsx(table),
     )

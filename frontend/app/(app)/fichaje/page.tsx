@@ -9,6 +9,7 @@ import {
   attendanceStateMeta,
   fmtDate,
   fmtMinutes,
+  fmtSignedMinutes,
   fmtTime,
   todayMadrid,
 } from "@/lib/format";
@@ -18,6 +19,7 @@ import type {
   AttendanceRecord,
   AttendanceSummary,
   Employee,
+  HoursBankSummary,
   Page,
 } from "@/lib/types";
 import {
@@ -53,6 +55,7 @@ export default function AttendancePage() {
   const canManage = can("attendance.manage");
 
   const me = useApi<AttendanceMe>("/api/v1/attendance/me");
+  const bank = useApi<HoursBankSummary>("/api/v1/hours-bank/me");
   const [busy, setBusy] = useState(false);
 
   const [today, setToday] = useState("");
@@ -108,6 +111,7 @@ export default function AttendancePage() {
       await api("/api/v1/attendance", { method: "POST", body: { event_type: event } });
       toast.success("Fichaje registrado", attendanceEventMeta[event]?.label ?? event);
       me.reload();
+      bank.reload();
       summary.reload();
       records.reload();
     } catch (err) {
@@ -237,6 +241,27 @@ export default function AttendancePage() {
                 />
               </div>
 
+              {bank.data && bank.data.items.length > 0 ? (
+                <div className="row" style={{ marginTop: 12, alignItems: "baseline" }}>
+                  <span className="small text-muted">Bolsa de horas del mes:</span>
+                  <strong
+                    style={{
+                      color:
+                        bank.data.items[0].balance_minutes >= 0
+                          ? "var(--success, #15803d)"
+                          : "var(--danger, #b91c1c)",
+                    }}
+                  >
+                    {fmtSignedMinutes(bank.data.items[0].balance_minutes)}
+                  </strong>
+                  <span className="tiny text-muted">
+                    {fmtMinutes(bank.data.items[0].worked_minutes)} fichadas ·{" "}
+                    {fmtMinutes(bank.data.items[0].contracted_minutes)} teóricas · ajustes{" "}
+                    {fmtSignedMinutes(bank.data.items[0].adjustments_minutes)}
+                  </span>
+                </div>
+              ) : null}
+
               <div className="row" style={{ marginTop: 16 }}>
                 {availableButtons.length === 0 ? (
                   <span className="small text-muted">No hay acciones disponibles.</span>
@@ -285,7 +310,11 @@ export default function AttendancePage() {
                           <Badge tone={event.tone as "success"}>{event.label}</Badge>
                         </td>
                         <td className="small text-muted">
-                          {record.source === "manual" ? "Manual (responsable)" : "Web"}
+                          {record.source === "manual"
+                            ? "Manual (responsable)"
+                            : record.source === "nfc"
+                              ? "Tarjeta NFC"
+                              : "Web"}
                         </td>
                         <td className="small text-muted">{record.note || "—"}</td>
                       </tr>

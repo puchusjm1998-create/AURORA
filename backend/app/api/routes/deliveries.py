@@ -110,6 +110,7 @@ def _to_read(delivery: Delivery) -> DeliveryRead:
         notes=delivery.notes,
         pallets=pallets,
         total_units=total_units,
+        has_signature=delivery.signature is not None,
         created_at=delivery.created_at,
         updated_at=delivery.updated_at,
     )

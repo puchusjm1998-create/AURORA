@@ -31,14 +31,27 @@ export default function ReportsPage() {
   const totalSale = summary.data?.categories.reduce((acc, item) => acc + Number(item.sale_value), 0) ?? 0;
   const totalUnits = summary.data?.categories.reduce((acc, item) => acc + Number(item.units), 0) ?? 0;
 
-  async function exportReport(kind: "inventory" | "movements", format: "csv" | "pdf" | "xlsx") {
+  type ReportKind =
+    | "inventory"
+    | "movements"
+    | "invoices"
+    | "deliveries"
+    | "employees"
+    | "incidents"
+    | "audit";
+
+  async function exportReport(kind: ReportKind, format: "csv" | "pdf" | "xlsx") {
     const key = `${kind}-${format}`;
     setBusy(key);
     try {
       const params = new URLSearchParams();
-      if (kind === "movements") {
+      if (["movements", "deliveries", "incidents", "audit"].includes(kind)) {
         if (dateFrom) params.set("date_from", new Date(`${dateFrom}T00:00:00`).toISOString());
         if (dateTo) params.set("date_to", new Date(`${dateTo}T23:59:59`).toISOString());
+      }
+      if (kind === "invoices") {
+        if (dateFrom) params.set("date_from", dateFrom);
+        if (dateTo) params.set("date_to", dateTo);
       }
       const suffix = params.toString() ? `?${params.toString()}` : "";
       await downloadFile(`/api/v1/reports/${kind}.${format}${suffix}`, `aurora-${kind}.${format}`);
@@ -195,6 +208,32 @@ export default function ReportsPage() {
                       ))}
                     </div>
                   </div>
+                  {([
+                    ["invoices", "Facturación y conciliaciones", "Número, proveedor, fechas, base, IVA, total, estado y SHA-256 del documento."],
+                    ["deliveries", "Repartos y entregas", "Destino, vehículo, conductor, palés, firma y horas de salida y entrega."],
+                    ["employees", "Plantilla y jornada", "Código, puesto, contrato semanal, estado, alta y cuenta vinculada."],
+                    ["incidents", "Incidencias de almacén", "Código, tipo, severidad, estado, ubicación, responsable, tiempos y resolución."],
+                    ["audit", "Auditoría inmutable", "Actor, acción, entidad, IP y cambios antes/después; filtrable por fecha y acción."],
+                  ] as const).map(([kind, title, description]) => (
+                    <div key={kind}>
+                      <strong>{title}</strong>
+                      <p className="hint" style={{ marginTop: 3 }}>{description}</p>
+                      <div className="grid grid-3" style={{ gap: 6, marginTop: 8 }}>
+                        {(["pdf", "xlsx", "csv"] as const).map((format) => (
+                          <button
+                            key={format}
+                            type="button"
+                            className={format === "xlsx" ? "btn btn-block" : "btn btn-ghost btn-block"}
+                            onClick={() => exportReport(kind, format)}
+                            disabled={!can("reports.export") || busy === `${kind}-${format}`}
+                          >
+                            {busy === `${kind}-${format}` ? <span className="spinner" /> : <IconDownload />}
+                            {format === "xlsx" ? "Excel" : format.toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                   {!can("reports.export") ? (
                     <Badge tone="warning">Su perfil solo puede consultar, no exportar</Badge>
                   ) : null}
@@ -206,7 +245,7 @@ export default function ReportsPage() {
                 <span>
                   El PDF se genera paginado con cabecera repetida y totales; el Excel incluye hoja de resumen,
                   cabecera fija, autofiltro, formatos numéricos y fila de totales. Los informes programados por
-                  correo siguen pendientes y no se anuncian como disponibles.
+                  correo usan el SMTP configurado y muestran su historial en esta misma página.
                 </span>
               </div>
             </div>
@@ -214,15 +253,16 @@ export default function ReportsPage() {
 
           <ReportSchedules />
 
-          <Card title="Cobertura de informes" subtitle="Qué se puede descargar hoy y qué queda pendiente">
+          <Card title="Cobertura de informes" subtitle="Qué se puede descargar y con qué alcance">
             <div className="grid grid-3">
               {[
                 ["Inventario y valoración", "PDF, Excel y CSV"],
                 ["Entradas y salidas por periodo", "PDF, Excel y CSV"],
-                ["Facturación y conciliaciones", "Pantalla (exportación pendiente)"],
-                ["Repartos y trabajadores", "Pantalla (exportación pendiente)"],
-                ["Incidencias y auditoría", "Pantalla y auditoría"],
-                ["Envío programado por correo", "Pendiente"],
+                ["Facturación y conciliaciones", "PDF, Excel y CSV"],
+                ["Repartos y entregas", "PDF, Excel y CSV"],
+                ["Plantilla y jornada", "PDF, Excel y CSV"],
+                ["Incidencias y auditoría", "PDF, Excel y CSV"],
+                ["Envío programado por correo", "Activo con SMTP configurado"],
               ].map(([title, status]) => (
                 <div key={title} className="alert" style={{ borderLeftColor: "var(--accent)" }}>
                   <strong>{title}</strong>

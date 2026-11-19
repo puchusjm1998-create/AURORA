@@ -6,10 +6,21 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_permission
 from app.core.config import get_settings
 from app.core.db import get_db
+from app.core.enums import PermissionCode
 from app.core.timeutils import utcnow
-from app.schemas import SystemInfo
+from app.models import User
+from app.schemas import (
+    QueueEnqueued,
+    QueueStatus,
+    QueueTaskStatus,
+    StorageStatus,
+    SystemInfo,
+)
+from app.services import s3 as s3_storage
+from app.worker import queue as task_queue
 
 router = APIRouter(prefix="/system", tags=["Sistema"])
 settings = get_settings()
@@ -41,11 +52,25 @@ IMPLEMENTED = [
     "AURORA Voice: dictado y lectura en el navegador con consultas reales de stock, tareas y repartos",
     "Calibración del almacén con plano real y tiempos cronometrados, con ajuste por regresión",
     "Turnos de trabajo semanales con cobertura exigida, asignación y control de solapes",
+    "Tarjetas NFC con token opaco (solo hash SHA-256), emisión, revocación, grabación NDEF y lectura física",
+    "Bolsa de horas: saldo real por contrato semanal, fichajes y ajustes justificados auditados",
+    "Seguimiento GPS de repartos con puntos append-only, distancia Haversine y antigüedad de la señal",
+    "Firma digital de entrega en PNG con SHA-256, verificación de integridad y bloqueo de re-firma",
+    "Registro de llamadas con handoff tel:/sip:, adaptador webhook y callback firmado del proveedor",
+    "Lector NFC en el navegador (Web NFC y lectores USB HID) y grabación de etiquetas NDEF",
+    "Almacenamiento documental con backend local o S3 compatible (AWS, MinIO, Ceph), SHA-256 y caché de descarga",
+    "Cola de tareas Celery sobre Redis con worker, beat, tarea de prueba y consulta de estado",
+    "Voz neuronal Piper en el servidor (ONNX local), Edge TTS y OpenAI TTS, con caché por hash y fallback del navegador",
+    "Informes nativos de facturación, repartos, plantilla, incidencias y auditoría en PDF, Excel y CSV, con filtros y permisos",
+    "Copias de seguridad que descargan y restauran documentos S3, y migración local → S3 idempotente verificada por SHA-256",
 ]
 
 PENDING = [
-    "Fase 7: tarjetas digitales NFC y bolsa de horas (los turnos ya están planificados)",
-    "Fase 8: integración telefónica SIP/API, seguimiento GPS y firma de entrega",
+    "Marcación automática con un proveedor SIP/API real: el adaptador webhook está probado, pero el sandbox no tiene operador ni credenciales",
+    "Lectura GPS en segundo plano con la aplicación cerrada: el navegador solo comparte ubicación mientras Mi reparto está abierto y con permiso",
+    "S3 de producción (AWS, MinIO o Ceph): el adaptador se prueba contra la API S3 emulada por moto; no hay clúster ni credenciales reales en el sandbox",
+    "Redis gestionado con TLS y Sentinel/Cluster: la cola se prueba con Redis 7.2 compilado en local; la topología de producción debe validarse en su infraestructura",
+    "Edge TTS y OpenAI TTS: el código está integrado, pero el sandbox no tiene salida a sus endpoints; la voz Piper local sí se ejecuta de punta a punta",
 ]
 
 
@@ -58,10 +83,48 @@ def system_info() -> SystemInfo:
         demo_mode=settings.demo_mode,
         server_time_utc=utcnow().isoformat().replace("+00:00", "Z"),
         warehouse_timezone=settings.warehouse_timezone,
-        phase="Fases 1-6 y 9-14: operación completa, voz, OCR, alertas y turnos; quedan fases 7 y 8",
+        phase="Fases 1-14 implementadas; S3, Redis/Celery y voz neuronal integrados. Los límites externos (S3/Redis gestionados, SIP y TTS en la nube) se declaran en Pendiente",
         implemented=IMPLEMENTED,
         pending=PENDING,
     )
+
+
+@router.get("/storage", response_model=StorageStatus, summary="Estado del almacenamiento")
+def storage_status(
+    _: User = Depends(require_permission(PermissionCode.INVENTORY_READ)),
+) -> StorageStatus:
+    return StorageStatus(**s3_storage.status())
+
+
+@router.get("/queue", response_model=QueueStatus, summary="Estado de la cola de trabajos")
+def queue_status(
+    _: User = Depends(require_permission(PermissionCode.INVENTORY_READ)),
+) -> QueueStatus:
+    return QueueStatus(**task_queue.status())
+
+
+@router.post("/queue/ping", response_model=QueueEnqueued, summary="Encolar tarea de prueba")
+def queue_ping(
+    _: User = Depends(require_permission(PermissionCode.SETTINGS_MANAGE)),
+) -> QueueEnqueued:
+    task_id, state = task_queue.enqueue_ping()
+    return QueueEnqueued(
+        task_id=task_id,
+        state=state,
+        message="Tarea encolada; consulte su estado en /system/queue/{task_id}.",
+    )
+
+
+@router.get(
+    "/queue/{task_id}",
+    response_model=QueueTaskStatus,
+    summary="Estado de una tarea de la cola",
+)
+def queue_task(
+    task_id: str,
+    _: User = Depends(require_permission(PermissionCode.SETTINGS_MANAGE)),
+) -> QueueTaskStatus:
+    return QueueTaskStatus(**task_queue.task_status(task_id))
 
 
 @router.get("/health", summary="Estado del servicio")

@@ -1,12 +1,14 @@
 # AURORA LOGISTICS AI
 
-Plataforma de gestión logística para almacenes de 10–50 trabajadores. Esta entrega cubre la
-**Fase 1, la primera entrega funcional completa, las Fases 2 y 3, el fichaje de jornada y la
-optimización de ubicaciones y repartos**: recepción → almacenamiento → localización → expedición,
-con inventario real, trazabilidad QR, palés, movimientos auditados, reservas de stock, tareas de
-almacén asignadas, incidencias con resolución trazable, fichaje con pausas y horas, sugerencias de
-ubicación y rutas de picking, repartos con vehículos y palés, facturas de proveedor, personal,
-informes y panel de control.
+Plataforma de gestión logística para almacenes de 10–50 trabajadores. Esta entrega cubre las
+**fases 1 a 14 en su parte verificable**, incluidos S3 compatible, cola Redis/Celery y voz neuronal
+Piper local. Los límites que dependen de infraestructura externa (clúster S3 o Redis gestionado,
+operador SIP y TTS en la nube) se declaran abajo y en `/sistema`; no se presentan como probados.
+El recorrido operativo es recepción →
+almacenamiento → localización → expedición, con inventario real, trazabilidad QR, palés,
+movimientos auditados, reservas, tareas, incidencias, fichaje con pausas, turnos, tarjetas NFC,
+bolsa de horas, calibración y rutas de picking, repartos, facturas, OCR, alertas, informes, voz y
+panel de control.
 
 El sistema no es una maqueta: la interfaz habla con una API FastAPI que persiste en base de datos,
 valida permisos en el servidor y registra cada operación en un libro de auditoría inmutable.
@@ -14,6 +16,8 @@ valida permisos en el servidor y registra cada operación en un libro de auditor
 - **Frontend:** Next.js 15 + TypeScript + PWA (exportación estática servida por el backend).
 - **Backend:** Python 3.11+ / FastAPI + SQLAlchemy 2.
 - **Base de datos:** SQLite en desarrollo y pruebas; PostgreSQL en producción.
+- **Documentos y cola:** disco local o S3 compatible; Redis 7 + Celery para trabajo asíncrono.
+- **Voz:** Piper ONNX local en el servidor, Edge/OpenAI TTS opcionales y Web Speech en el navegador.
 - **Idioma y formato:** español de España, fechas en `Europe/Madrid`, almacenamiento en UTC.
 - **Despliegue:** Docker y cloud europea (`docs/DEPLOYMENT.md`).
 
@@ -56,33 +60,51 @@ Además: facturas con documento original inmutable, conciliación, personal y cu
 | Repartos con vehículos, palés y expedición real de stock | ✅ | `/repartos` y ficha `/reparto` (cargar = salida auditada) |
 | Indicadores operativos en el panel | ✅ | `/` (tareas, reservas, incidencias y disponible real) |
 | Copias verificables, prueba de humo y prueba de carga | ✅ | `scripts/backup.py`, `smoke_test.py`, `load_test.py` (ver `docs/DEPLOYMENT.md`) |
-| Informes PDF y Excel nativos | ✅ | `/informes` (PDF paginado, Excel con resumen y totales) |
+| Informes PDF y Excel nativos | ✅ | `/informes` (inventario, movimientos, facturas, repartos, plantilla, incidencias y auditoría) |
 | Métricas Prometheus | ✅ | `/metrics` (HTTP, latencias, base, almacenamiento y operación) |
 | Informes programados por correo | ✅ | `/informes` (cadencia, destinatarios, historial y envío con cron) |
 | Trazas OpenTelemetry | ✅ | `AURORA_TRACING_ENABLED=true` (OTLP/consola, `X-Trace-ID`, SQL instrumentado) |
 | Alertas gestionadas | ✅ | `/alertas` (reglas por umbral, cooldown, reconocimiento, resolución y correo) |
 | OCR local de facturas | ✅ | `/facturas` (PDF/imagen, proveedor, fechas, totales y líneas; revisión humana) |
-| AURORA Voice | ✅ | `/voz` (dictado y lectura del navegador; respuestas con datos reales, sin audio fuera del dispositivo) |
+| AURORA Voice | ✅ | `/voz` (dictado, consultas reales y voz neuronal Piper en el servidor con caché) |
 | Calibración del almacén | ✅ | `/optimizacion` (plano, tiempos cronometrados y regresión con R²/MAE) |
 | Turnos de trabajo | ✅ | `/turnos` (plantillas semanales, cobertura exigida, asignación y solapes) |
+| Tarjetas NFC para fichar | ✅ | `/tarjetas` (emisión, token mostrado una vez, revocación y grabación NDEF) |
+| Lector físico de tarjetas NFC | ✅ | `/lector` (Web NFC en Chrome Android y lectores USB en modo teclado) |
+| Bolsa de horas | ✅ | `/bolsa-horas` (saldo por contrato, trabajado y ajustes) y resumen propio en `/fichaje` |
+| Seguimiento GPS de repartos | ✅ | `/mi-reparto` (envío adaptativo con pantalla activa) y `/reparto` (recorrido, última posición y distancia) |
+| Firma digital de entrega | ✅ | `/mi-reparto` (firma táctil, PNG + SHA-256) y consulta en `/reparto` |
+| Llamadas con handoff SIP/tel | ✅ | `/llamadas` (registro, enlaces `tel:`/`sip:`, webhook y callback del proveedor) |
+| Almacenamiento S3 compatible | ✅ | `STORAGE_BACKEND=s3` (AWS, MinIO o Ceph), misma clave, SHA-256 y caché de descarga |
+| Cola Redis + Celery | ✅ | Worker y beat; `/sistema` muestra broker, worker, tarea de prueba y estado |
+| Copias con documentos S3 | ✅ | `scripts/backup.py` descarga el bucket al tar y restaura con clave, MIME y SHA-256 |
+| Migración local → S3 | ✅ | `scripts/storage_migrate.py` idempotente, con verificación y `--dry-run` |
+| Voz neuronal local | ✅ | `VOICE_TTS_PROVIDER=piper`, modelo ONNX español y caché por hash; sin salida a Internet |
 
-### Lo que todavía no está implementado (y no se muestra como si lo estuviera)
+### Lo que todavía no está implementado o depende del entorno
 
-Estas capacidades pertenecen a fases posteriores y dependen de proveedores externos. La interfaz
-las identifica explícitamente:
+La interfaz identifica explícitamente estas capacidades y sus límites; no se simulan:
 
-- **LLM conversacional y voz neuronal** (Fase 5 ampliada): AURORA Voice usa la Web Speech API del
-  navegador y un motor local de consultas; no hay modelo de lenguaje externo ni claves de terceros.
-- **Almacenamiento S3** (Fase 4): los originales se guardan ya de forma inmutable en disco local con
-  estructura y SHA-256; el adaptador S3 queda pendiente.
-- **Redis/Celery** (Fase 4+): trabajos asíncronos (informes programados, notificaciones). Las
-  tareas de almacén de la Fase 2 ya son reales, pero se ejecutan de forma síncrona.
-- **Telefonía SIP/API, GPS de repartos y firma digital de entrega** (Fase 8); **tarjetas NFC,
-  turnos planificados y bolsa de horas** (Fase 7). Los repartos ya expiden stock real.
-- **Notificaciones asíncronas** (Redis/Celery): las alertas y los informes ya se envían por SMTP,
-  pero la evaluación corre en cron síncrono y no hay cola de trabajos.
-- **Bolsa de horas y turnos con firma NFC** (Fase 7): la planificación semanal ya es real y se
-  controlan solapes, pero no hay fichaje NFC ni cómputo de bolsa de horas.
+- **LLM conversacional**: AURORA Voice interpreta intenciones con un motor local de reglas; no hay
+  modelo de lenguaje generativo ni claves de terceros. La síntesis de voz sí es neuronal (Piper).
+- **S3 de producción**: el adaptador usa la API S3 real mediante boto3 y se prueba contra la API
+  emulada por `moto`; no hay clúster AWS, MinIO o Ceph ni credenciales IAM en el sandbox.
+- **Redis gestionado**: la cola se prueba con Redis 7.2 compilado en local. TLS, Sentinel, Cluster
+  y la cuota de un proveedor gestionado deben validarse en la infraestructura de destino.
+- **TTS en la nube**: Edge y OpenAI están implementados, pero el sandbox no tiene salida a sus
+  endpoints; la voz Piper local sí se ejecuta de punta a punta.
+- **Marcación automática con un operador SIP/API real** (Fase 8): el adaptador webhook y el
+  handoff `tel:`/`sip:` son reales y están probados, pero el sandbox no tiene proveedor ni
+  credenciales; sin `TELEPHONY_WEBHOOK_URL` no se origina ninguna llamada y la API responde 503.
+- **GPS en segundo plano**: el navegador solo comparte ubicación mientras `/mi-reparto` está
+  abierto y con permiso explícito; no hay aplicación móvil nativa ni seguimiento con la pantalla
+  cerrada.
+- **Beat en producción**: el `beat_schedule` evalúa alertas y envía informes cada 5 minutos. El cron
+  síncrono anterior sigue disponible como alternativa, pero no debe ejecutarse a la vez que beat.
+- **Web NFC limitado por el navegador**: la lectura y grabación de etiquetas funciona con Chrome
+  para Android sobre HTTPS y con lectores USB que escriben el token como teclado. Safari/iOS no
+  implementa Web NFC; la entrada manual del token sigue disponible. La tarjeta es un token opaco,
+  no una tarjeta bancaria ni un certificado criptográfico en hardware.
 - **Medición automática de tiempos**: los cronometrajes se introducen desde la ruta calculada; no
   hay sensores ni lectores de presencia que midan recorridos sin intervención.
 
@@ -102,7 +124,11 @@ pip install -r backend/requirements.txt
 npm --prefix frontend install
 npm --prefix frontend run build
 
-# 3) Base de datos + datos de demostración (aislados)
+# 3) Modelo de voz neuronal local (180 MB, una sola vez; se verifica su SHA-256)
+#    Voz es_ES-davefx-medium, CC0, procedente de Piper Voices.
+python backend/scripts/fetch_voice_model.py
+
+# 4) Base de datos + datos de demostración (aislados)
 cd backend
 export DATABASE_URL="sqlite:///$(pwd)/data/demo.db"
 export DEMO_MODE=true
@@ -110,9 +136,24 @@ export AURORA_ADMIN_EMAIL=admin@aurora.demo
 export AURORA_ADMIN_PASSWORD='Aurora2026!'
 python scripts/seed_demo.py
 
-# 4) Arranque
+# 5) Arranque
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+Redis y Celery son opcionales en desarrollo; sin worker, `/sistema` lo indica y la API sigue
+funcionando. Para probar la cola real:
+
+```bash
+# Terminal 2: Redis (o docker run -p 6379:6379 redis:7.2-alpine)
+redis-server --port 6379
+# Terminal 3: worker
+cd backend && ../.venv/bin/celery -A app.worker.celery_app worker --loglevel=info
+# Terminal 4: beat (tareas programadas)
+cd backend && ../.venv/bin/celery -A app.worker.celery_app beat --loglevel=info
+```
+
+La voz neuronal se activa por defecto (`VOICE_TTS_PROVIDER=piper`) y requiere el modelo del paso 3.
+Sin modelo, `/voz` cae a `SpeechSynthesis` del navegador y `/sistema` lo muestra como no disponible.
 
 Abra `http://localhost:8000`. La API interactiva está en `/api/docs`.
 
@@ -154,14 +195,14 @@ use otra `DATABASE_URL` y **no** ejecute el script de demostración.
 backend/
   app/
     core/          configuración, enums, RBAC, seguridad, errores, tiempo UTC/Madrid
-    models.py      33 tablas SQLAlchemy (inventario, palés, movimientos, facturas…)
+    models.py      45 tablas SQLAlchemy (inventario, palés, movimientos, facturas…)
     schemas.py     DTOs Pydantic y paginación
     api/           dependencias, serializadores y rutas /api/v1
-    services/      StockEngine, auditoría, secuencias, QR, almacenamiento
+    services/      StockEngine, auditoría, secuencias, QR, OCR, calibración, turnos, NFC y bolsa de horas
     db/            bootstrap, triggers de inmutabilidad
   alembic/         migraciones versionadas
   scripts/         seed_demo.py, backup.py, smoke_test.py y load_test.py
-  tests/           83 pruebas automatizadas
+  tests/           115 pruebas automatizadas
 frontend/
   app/             rutas App Router (login y área autenticada)
   components/      design system, shell, selectores, escáner QR
@@ -243,13 +284,17 @@ cd backend
 ../.venv/bin/python -m pytest tests -q
 ```
 
-Resultado actual: **83 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
+Resultado actual: **115 pruebas en verde** (autenticación/RBAC, ciclo de inventario, palés,
 etiquetas, escaneo, facturas, mapa del almacén, reservas —incluida su caducidad—, tareas de
 almacén, incidencias, fichaje —secuencias y resumen de horas—, optimización de ubicaciones y
 rutas, repartos con expedición de stock, informes, auditoría y herramientas de operación: copia
 con manifiesto SHA-256, retención y restauración, e informes PDF/Excel con contenido verificado, métricas Prometheus, envío SMTP con un servidor local de prueba, trazas OpenTelemetry, alertas
 gestionadas con evaluación, reconocimiento y notificación, OCR local sobre PDF e imagen y consultas
-de voz con permisos, calibración con regresión y planificación de turnos con solapes).
+de voz con permisos, calibración con regresión, planificación de turnos con solapes, tarjetas NFC con token de un solo
+uso, bolsa de horas con ajustes justificados, GPS de reparto con filtro de saltos imposibles, firma
+PNG verificada por SHA-256, llamadas con handoff o webhook, almacenamiento S3 contra `moto`,
+cola Celery real, voz Piper local con caché, informes de facturación/repartos/plantilla/incidencias/
+auditoría y copias de seguridad S3 de ida y vuelta).
 Las pruebas usan una base de datos SQLite
 temporal por ejecución; nunca tocan datos reales.
 
@@ -292,6 +337,7 @@ healthchecks. Herramientas de operación incluidas, sin dependencias nuevas:
 ```bash
 cd backend
 ../.venv/bin/python -m scripts.backup --label diaria --keep 14   # copia + manifiesto SHA-256
+../.venv/bin/python -m scripts.storage_migrate --dry-run          # migrar documentos a S3
 ../.venv/bin/python -m scripts.backup --list                     # copias disponibles
 ../.venv/bin/python -m scripts.smoke_test --base-url https://aurora.example.com
 ../.venv/bin/python -m scripts.load_test --concurrency 8 --duration 20
@@ -303,7 +349,8 @@ Resumen del despliegue:
 docker compose up -d --build
 ```
 
-El contenedor compila el frontend y sirve la aplicación completa en el puerto 8000. En producción
+El contenedor compila el frontend y sirve la aplicación completa en el puerto 8000; Compose añade
+Redis, worker Celery, beat y un inicializador del modelo de voz. En producción
 son obligatorios `ENVIRONMENT=production`, `JWT_SECRET` aleatorio, `COOKIE_SECURE=true` y
 `DATABASE_URL` de PostgreSQL. El backend se niega a arrancar con SQLite en producción o con la
 clave de desarrollo.

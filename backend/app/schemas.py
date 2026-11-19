@@ -18,6 +18,7 @@ from app.core.enums import (
     AlertSeverity,
     AlertStatus,
     AttendanceEventType,
+    CallStatus,
     DeliveryStatus,
     EmployeeStatus,
     IncidentSeverity,
@@ -27,6 +28,8 @@ from app.core.enums import (
     MovementStatus,
     MovementType,
     PalletStatus,
+    NfcCardStatus,
+    NfcTapAction,
     ReportFormat,
     ReportKind,
     ReservationStatus,
@@ -166,6 +169,7 @@ class EmployeeCreate(BaseModel):
     status: EmployeeStatus = EmployeeStatus.ACTIVE
     hire_date: Optional[date] = None
     phone: Optional[str] = None
+    weekly_hours: Decimal = Field(default=Decimal("40"), gt=0, le=60)
 
 
 class EmployeeUpdate(BaseModel):
@@ -176,6 +180,7 @@ class EmployeeUpdate(BaseModel):
     status: Optional[EmployeeStatus] = None
     hire_date: Optional[date] = None
     phone: Optional[str] = None
+    weekly_hours: Optional[Decimal] = Field(default=None, gt=0, le=60)
 
 
 class EmployeeRead(ORMBase):
@@ -187,6 +192,7 @@ class EmployeeRead(ORMBase):
     status: EmployeeStatus
     hire_date: Optional[date] = None
     phone: Optional[str] = None
+    weekly_hours: Decimal
     user_id: Optional[str] = None
     created_at: UtcDateTime
 
@@ -651,8 +657,52 @@ class DeliveryRead(ORMBase):
     notes: str = ""
     pallets: list[DeliveryPalletRead]
     total_units: Decimal
+    has_signature: bool = False
     created_at: UtcDateTime
     updated_at: UtcDateTime
+
+
+class DeliveryTrackingCreate(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    accuracy_m: Optional[float] = Field(default=None, ge=0, le=50000)
+    speed_mps: Optional[float] = Field(default=None, ge=0, le=150)
+    heading_deg: Optional[float] = Field(default=None, ge=0, le=360)
+
+
+class DeliveryTrackingRead(BaseModel):
+    id: str
+    latitude: float
+    longitude: float
+    accuracy_m: Optional[float] = None
+    speed_mps: Optional[float] = None
+    heading_deg: Optional[float] = None
+    source: str
+    recorded_at: UtcDateTime
+    recorded_by: Optional[str] = None
+
+
+class DeliveryTrackingSummary(BaseModel):
+    delivery_id: str
+    reference: str
+    points: list[DeliveryTrackingRead]
+    distance_m: float
+    last: Optional[DeliveryTrackingRead] = None
+    stale_seconds: Optional[int] = None
+    stale: bool = True
+
+
+class DeliverySignatureRead(BaseModel):
+    delivery_id: str
+    reference: str
+    signer_name: str
+    signer_document: str = ""
+    signed_at: UtcDateTime
+    sha256: str
+    size_bytes: int
+    mime_type: str
+    image_url: str
+    integrity: Literal["ok", "file_missing", "mismatch"] = "ok"
 
 
 class AttendanceCreate(BaseModel):
@@ -1176,6 +1226,46 @@ class SystemInfo(BaseModel):
     pending: list[str]
 
 
+class StorageStatus(BaseModel):
+    backend: str
+    bucket: Optional[str] = None
+    prefix: str = ""
+    endpoint: str = ""
+    reachable: bool = False
+    error: Optional[str] = None
+
+
+class QueueStatus(BaseModel):
+    enabled: bool
+    eager: bool
+    broker_available: bool
+    worker_online: bool
+    broker: str
+    task: str
+    message: str
+
+
+class QueueEnqueued(BaseModel):
+    task_id: str
+    state: str
+    message: str
+
+
+class QueueTaskStatus(BaseModel):
+    task_id: str
+    state: str
+    ready: bool
+    successful: Optional[bool] = None
+    result: Optional[dict[str, Any]] = None
+    error: Optional[str] = None
+
+
+class VoiceSpeakRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=1200)
+    voice: Optional[str] = Field(default=None, max_length=100)
+    rate: str = Field(default="+0%", max_length=12)
+
+
 class ScanResult(BaseModel):
     kind: str
     code: str
@@ -1401,3 +1491,149 @@ class VoiceResponse(BaseModel):
     provider: str
     data: dict[str, Any] = {}
     suggestions: list[str] = []
+
+
+# ---------------------------------------------------------------------------
+# Phase 7 – NFC cards and hours bank
+# ---------------------------------------------------------------------------
+class NfcCardCreate(BaseModel):
+    employee_id: str
+    label: str = Field(default="", max_length=80)
+
+
+class NfcCardRead(ORMBase):
+    id: str
+    employee_id: str
+    employee_code: str
+    employee_name: str
+    label: str
+    token_last4: str
+    status: NfcCardStatus
+    last_used_at: Optional[UtcDateTime] = None
+    revoked_at: Optional[UtcDateTime] = None
+    created_at: UtcDateTime
+
+
+class NfcCardIssued(NfcCardRead):
+    token: str
+    warning: str = "Guarde este token ahora: no volverá a mostrarse."
+
+
+class NfcTapRequest(BaseModel):
+    token: str = Field(min_length=8, max_length=200)
+    action: NfcTapAction = NfcTapAction.AUTO
+    note: str = Field(default="", max_length=255)
+
+
+class NfcTapRead(BaseModel):
+    card_id: str
+    card_label: str
+    employee: EmployeeBrief
+    event_type: AttendanceEventType
+    event_label: str
+    occurred_at: UtcDateTime
+    state: Literal["out", "in", "break"]
+    message: str
+
+
+class HoursBankAdjustmentCreate(BaseModel):
+    employee_id: str
+    effective_date: date
+    minutes: int = Field(ge=-600, le=600)
+    reason: str = Field(min_length=3, max_length=255)
+
+    @field_validator("minutes")
+    @classmethod
+    def _non_zero(cls, value: int) -> int:
+        if value == 0:
+            raise ValueError("El ajuste no puede ser de cero minutos.")
+        return value
+
+
+class HoursBankAdjustmentRead(ORMBase):
+    id: str
+    employee_id: str
+    employee_code: str
+    employee_name: str
+    effective_date: date
+    minutes: int
+    reason: str
+    created_at: UtcDateTime
+
+
+class HoursBankEmployee(BaseModel):
+    employee_id: str
+    employee_code: str
+    employee_name: str
+    weekly_hours: Decimal
+    worked_minutes: int
+    contracted_minutes: int
+    adjustments_minutes: int
+    balance_minutes: int
+    days_worked: int
+
+
+class HoursBankTotals(BaseModel):
+    worked_minutes: int
+    contracted_minutes: int
+    adjustments_minutes: int
+    balance_minutes: int
+
+
+class HoursBankSummary(BaseModel):
+    date_from: date
+    date_to: date
+    items: list[HoursBankEmployee]
+    totals: HoursBankTotals
+
+
+# ---------------------------------------------------------------------------
+# Phase 8 – telephony
+# ---------------------------------------------------------------------------
+class TelephonyStatus(BaseModel):
+    mode: str
+    sip_domain: str
+    sip_extension: str
+    webhook_configured: bool
+    callback_configured: bool
+    can_originate: bool
+    message: str
+
+
+class CallCreate(BaseModel):
+    contact_name: str = Field(min_length=2, max_length=120)
+    phone: str = Field(min_length=7, max_length=32)
+    purpose: str = Field(default="", max_length=255)
+    incident_id: Optional[str] = None
+
+
+class CallUpdate(BaseModel):
+    status: Literal["in_progress", "completed", "failed"]
+    result: str = Field(default="", max_length=2000)
+
+
+class CallCallback(BaseModel):
+    reference: Optional[str] = None
+    provider_call_id: Optional[str] = None
+    status: Literal["queued", "in_progress", "completed", "failed"]
+    result: str = Field(default="", max_length=2000)
+
+
+class CallRead(BaseModel):
+    id: str
+    contact_name: str
+    phone: str
+    purpose: str
+    status: CallStatus
+    provider: Optional[str] = None
+    provider_call_id: Optional[str] = None
+    incident_id: Optional[str] = None
+    authorized_by: Optional[str] = None
+    created_by: Optional[str] = None
+    started_at: Optional[UtcDateTime] = None
+    ended_at: Optional[UtcDateTime] = None
+    result: str
+    created_at: UtcDateTime
+    tel_uri: str
+    sip_uri: Optional[str] = None
+    dial_uri: str

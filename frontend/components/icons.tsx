@@ -310,3 +310,19 @@ export const IconPin = (p: IconProps) => (
     <circle cx="12" cy="10" r="2.4" />
   </svg>
 );
+
+
+export const IconPhone = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M6.5 3.5h3l1.5 4-2 1.5a12 12 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2.2 2A17.5 17.5 0 0 1 4.5 5.7a2 2 0 0 1 2-2.2Z" />
+  </svg>
+);
+
+export const IconNfc = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M5 8.5a9.5 9.5 0 0 1 0 7" />
+    <path d="M8.5 6a13 13 0 0 1 0 12" />
+    <path d="M12 3.5a17 17 0 0 1 0 17" />
+    <rect x="15.5" y="9" width="5.5" height="6" rx="1" />
+  </svg>
+);
